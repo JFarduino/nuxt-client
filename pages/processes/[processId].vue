@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useHead } from '#imports'
-import { ref, onMounted, watch, reactive, nextTick } from 'vue'
+import { ref, onMounted, watch, reactive, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useRuntimeConfig } from '#imports'
@@ -9,6 +9,9 @@ import { uuid } from 'vue-uuid';
 import { useQuasar } from 'quasar'
 import HelpDialog from '@/components/help/HelpDialog.vue'
 import processIdHelp from '@/components/help/processIdHelp.js'
+import { copyToClipboard } from 'quasar'
+import { normalizeStatus, isTerminalStatus } from '~/composables/utils/jobs'
+import { errorSummary } from '~/composables/utils/ogcError'
  
  
 const {
@@ -18,7 +21,7 @@ const {
 const authStore = useAuthStore()
 const { locale, t } = useI18n()
 const config = useRuntimeConfig()
-const { buildOgcApiUrl, getRequestHeaders } = useOgcApiServer()
+const { buildOgcApiUrl, getRequestHeaders, apiFetch } = useOgcApiServer()
  
 const data = ref(null)
 const inputValues = ref<Record<string, Array<{ mode: 'value' | 'href', value: string, href: string }>>>({})
@@ -28,6 +31,13 @@ const loading = ref(false)
 const submitting = ref(false);
 const jobStatus = ref('')
 const preferMode = ref<'respond-async' | 'respond-sync'>('respond-async')
+const executionModeOptions = computed(() => {
+  const jco: string[] = data.value?.jobControlOptions || ['sync-execute', 'async-execute']
+  const options = []
+  if (jco.includes('async-execute') || !jco.length) options.push({ label: t('Asynchronous (job)'), value: 'respond-async' })
+  if (jco.includes('sync-execute') || !jco.length) options.push({ label: t('Synchronous (wait for the result)'), value: 'respond-sync' })
+  return options.length ? options : [{ label: 'respond-async', value: 'respond-async' }, { label: 'respond-sync', value: 'respond-sync' }]
+})
 const jsonRequestPreview = ref('')
 const showDialog = ref(false)
 const requiredInputs = ref<string[]>([])
@@ -288,13 +298,13 @@ const normalizeBboxSchema = (schema: any) => {
 
 const fetchData = async () => {
   try {
-    const processUrl = await buildOgcApiUrl(`/processes/${processId}`, {
-      acceptLanguage: locale.value
-    })
+    data.value = await apiFetch(`/processes/${processId}`, { query: { f: 'json' }, acceptLanguage: locale.value })
 
-    data.value = await $fetch(processUrl, {
-      headers: getRequestHeaders(locale.value)
-    })
+    // Default execution mode follows what the process supports.
+    const jco: string[] = data.value?.jobControlOptions || []
+    if (jco.length && !jco.includes('async-execute') && jco.includes('sync-execute')) {
+      preferMode.value = 'respond-sync'
+    }
  
     if (data.value && data.value.inputs) {
       for (const [key, input] of Object.entries(data.value.inputs)) {
@@ -730,26 +740,35 @@ const pollJobStatus = async (jobId: string) => {
   while (true) {
     try {
       const job = await $fetch(jobUrl, { headers })
-      jobStatus.value = job.status
+      const status = normalizeStatus(job.status)
+      jobStatus.value = status
+      if (job.progress !== undefined) progressPercent.value = job.progress
+      if (job.message) progressMessage.value = job.message
 
-      // Stop polling when job is finished or canceled
-      if (['successful', 'failed', 'canceled'].includes(job.status)) {
-        if (job.status === 'successful') {
+      // Stop polling when job is finished or dismissed
+      if (isTerminalStatus(status)) {
+        if (status === 'successful') {
+          progressPercent.value = 100
           response.value = job
-        } else if (job.status === 'failed') {
+        } else if (status === 'failed') {
           response.value = { error: 'Job failed', details: job }
-        } else if (job.status === 'canceled') {
-          response.value = { info: 'Job was canceled', details: job }
+        } else {
+          response.value = { info: 'Job was dismissed', details: job }
         }
 
         loading.value = false
+        ws?.close()
         break
       }
 
       // Poll every 2 seconds
       await new Promise(resolve => setTimeout(resolve, 2000))
-    } catch (err) {
-      console.error('Polling error:', err)
+    } catch (err: any) {
+      if (err?.status === 404 || err?.statusCode === 404) {
+        jobStatus.value = 'dismissed'
+      } else {
+        console.error('Polling error:', err)
+      }
       loading.value = false
       break
     }
@@ -879,14 +898,10 @@ const submitProcess = async () => {
       submitting.value = true;
     }
  
-    const executionUrl = await buildOgcApiUrl(`/processes/${processId}/execution`, {
-      acceptLanguage: locale.value
-    })
-
-    const res = await $fetch(executionUrl, {
+    const res = await apiFetch(`/processes/${processId}/execution`, {
       method: "POST",
+      acceptLanguage: locale.value,
       headers: {
-        ...getRequestHeaders(locale.value),
         "Content-Type": "application/json",
         Prefer: preferMode.value + (preferMode.value == "respond-async" ? ";return=representation" : ""),
       },
@@ -990,14 +1005,31 @@ const submitProcess = async () => {
     }
   } catch (error) {
     console.error("Execution error (POST):", error);
-    $q.notify({ type: "negative", message: "Process execution failed." });
+    const detail = errorSummary(error, t('Process execution failed.'));
+    $q.notify({ type: "negative", message: detail, timeout: 10000 });
     jobStatus.value = "failed";
-    progressMessage.value = "Execution failed";
+    progressMessage.value = detail;
+    response.value = { error: detail };
     loading.value = false;
   } finally {
     submitting.value = false;
   }
 };
+
+// "Copy as curl" for the execute request shown in the preview dialog.
+const copyAsCurl = async () => {
+  try {
+    const executionUrl = await buildOgcApiUrl(`/processes/${processId}/execution`, { acceptLanguage: locale.value })
+    const headers = getRequestHeaders(locale.value)
+    const parts = [`curl -X POST '${executionUrl}'`, `-H 'Content-Type: application/json'`, `-H 'Prefer: ${preferMode.value}'`]
+    if (headers.Authorization) parts.push(`-H 'Authorization: ${headers.Authorization}'`)
+    parts.push(`-d '${(jsonRequestPreview.value || '{}').replace(/'/g, "'\\''")}'`)
+    await copyToClipboard(parts.join(' \\\n  '))
+    $q.notify({ type: 'positive', message: t('curl command copied') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: t('Copy failed') })
+  }
+}
 
  
  
@@ -1582,22 +1614,23 @@ async function cancelJob() {
       headers: getRequestHeaders(locale.value)
     })
 
-    jobStatus.value = 'canceled' 
+    jobStatus.value = 'dismissed'
     loading.value = false
     submitting.value = false
+    response.value = null
 
-    stopJobTracking()              
+    stopJobTracking()
     $q.notify({
       type: 'positive',
-      message: 'Execution canceled'
+      message: t('Execution dismissed')
     })
-
-    // DO NOT null jobId.value here so user can still delete the job if needed
+    // The server removes dismissed jobs: nothing left to delete.
+    jobId.value = ''
   } catch (err) {
     console.error(err)
     $q.notify({
       type: 'negative',
-      message: 'Failed to cancel job'
+      message: errorSummary(err, t('Failed to cancel job'))
     })
   } finally {
     isCanceling.value = false
@@ -1618,11 +1651,11 @@ const deleteJob = async () => {
     })
     jobStatus.value = ''
     response.value = null
-    jobId.value = null
-    $q.notify({ type: 'positive', message: 'Job deleted successfully' })
+    jobId.value = ''
+    $q.notify({ type: 'positive', message: t('Job deleted successfully') })
   } catch (err) {
     console.error(err)
-    $q.notify({ type: 'negative', message: 'Delete Failed' })
+    $q.notify({ type: 'negative', message: errorSummary(err, t('Failed to delete job')) })
   } finally {
     isCanceling.value = false
   }
@@ -2339,21 +2372,32 @@ function getFormatAndRef(input) {
         </div>
           <q-select
             v-model="preferMode"
-            :options="['respond-async', 'respond-sync']"
-            label="Execution Mode"
+            :options="executionModeOptions"
+            emit-value
+            map-options
+            :label="t('Execution Mode')"
             filled
             dense
             class="q-mb-md"
           />
-        <div class="q-mt-md row q-gutter-sm">
+        <div class="q-mt-md row q-gutter-sm items-center">
           <q-btn
-            label="Submit"
+            :label="t('Execute')"
+            icon="play_arrow"
             type="submit"
             color="primary"
             :loading="loading || submitting"
-            :disable="jobStatus === 'running' || jobStatus === 'submitted'"
+            :disable="jobStatus === 'running' || jobStatus === 'submitted' || jobStatus === 'accepted'"
           />
-          <q-btn color="primary" outline label="Show JSON Preview" @click="showDialog = true" />
+          <q-btn color="primary" outline :label="t('Show JSON Preview')" @click="showDialog = true" />
+          <q-btn
+            v-if="jobId"
+            color="secondary"
+            text-color="primary"
+            icon="work"
+            :label="t('Open the job page')"
+            :to="`/jobs/${jobId}`"
+          />
           <!-- Cancel while job is running / submitted -->
           <div
             v-if="jobStatus === 'submitted' || jobStatus === 'running'"
@@ -2364,7 +2408,7 @@ function getFormatAndRef(input) {
               icon="cancel"
               :loading="isCanceling"
               @click="cancelJob"
-              :label="isCanceling ? 'Canceling…' : 'Cancel Job'"
+              :label="isCanceling ? t('Canceling…') : t('Dismiss job')"
             />
           </div>
 
@@ -2379,7 +2423,7 @@ function getFormatAndRef(input) {
               icon="delete"
               :loading="isCanceling"
               @click="deleteJob"
-              :label="isCanceling ? 'Deleting…' : 'Delete Job'"
+              :label="isCanceling ? t('Deleting…') : t('Delete job')"
             />
           </div> 
         </div>
@@ -2387,13 +2431,15 @@ function getFormatAndRef(input) {
  
       <q-dialog v-model="showDialog" persistent>
         <q-card style="min-width: 70vw; max-width: 90vw;">
-          <q-card-section>
-            <div class="text-h6">Execute Request Confirmation</div>
+          <q-card-section class="row items-center">
+            <div class="text-h6">{{ t('Execute Request Confirmation') }}</div>
+            <q-space />
+            <q-btn flat dense icon="terminal" :label="t('Copy as curl')" @click="copyAsCurl" />
           </q-card-section>
  
           <q-card-section class="q-pt-none">
             <q-banner dense class="bg-grey-2 text-black q-pa-sm">
-              This is the full request that will be sent to the Execute endpoint:
+              {{ t('This is the full request that will be sent to the Execute endpoint:') }}
             </q-banner>
             <q-input
               v-model="jsonRequestPreview"
@@ -2408,9 +2454,9 @@ function getFormatAndRef(input) {
           </q-card-section>
  
           <q-card-actions align="right">
-            <q-btn flat label="Cancel" color="primary" v-close-popup />
+            <q-btn flat :label="t('Cancel')" color="primary" v-close-popup />
             <q-btn
-              label="Submit Request"
+              :label="t('Submit Request')"
               color="primary"
               :loading="loading || submitting"
               :disable="loading || submitting"
@@ -2447,10 +2493,26 @@ function getFormatAndRef(input) {
       </div>
 
       <div class="q-mt-lg" v-if="response">
-        <h6>Execution Response</h6>
-        <details>
-          <summary class="text-primary text-bold cursor-pointer">Show Raw JSON</summary>
-          <pre>{{ JSON.stringify(response, null, 2) }}</pre>
+        <div class="row items-center q-mb-sm">
+          <div class="text-h6 q-my-none">{{ t('Execution Response') }}</div>
+          <q-space />
+          <q-btn
+            v-if="jobId"
+            flat
+            dense
+            color="primary"
+            icon="work"
+            :label="t('Open the job page')"
+            :to="`/jobs/${jobId}`"
+          />
+        </div>
+        <q-banner v-if="response.error" dense rounded class="bg-red-1 text-negative q-mb-sm">
+          <template #avatar><q-icon name="error" color="negative" /></template>
+          {{ typeof response.error === 'string' ? response.error : (response.error.description || response.error.detail || response.error.title || t('Execution failed')) }}
+        </q-banner>
+        <details open>
+          <summary class="text-primary text-bold cursor-pointer">{{ t('Show Raw JSON') }}</summary>
+          <pre class="response-pre">{{ JSON.stringify(response, null, 2) }}</pre>
         </details>
       </div>
     </div>
@@ -2458,4 +2520,16 @@ function getFormatAndRef(input) {
   </q-page>
   </div>
 </template>
- 
+
+<style scoped>
+.response-pre {
+  max-height: 480px;
+  overflow: auto;
+  background: #f4f4f4;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+</style>
