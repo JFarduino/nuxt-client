@@ -381,13 +381,10 @@ const checkConformance = async () => {
 
     if (response.ok) {
       const conformance = await response.json()
-      console.log('Conformance response:', conformance)
 
-      // Vérifier si l'API supporte le déploiement CWL
+      // Does the API support CWL deployment (OGC API - Processes - Part 2)?
       const cwlConformanceUrl = 'http://www.opengis.net/spec/ogcapi-processes-2/1.0/conf/deploy-replace-undeploy'
       isConformToCwl.value = conformance.conformsTo?.includes(cwlConformanceUrl) || false
-
-      console.log('CWL Conformance:', isConformToCwl.value)
     } else {
       console.error('Error fetching conformance:', response.status)
       isConformToCwl.value = false
@@ -478,6 +475,16 @@ const onFileAdded = (files: File[]) => {
     reader.onload = (e) => (fileContent.value = e.target?.result as string)
     reader.readAsText(file.value)
   }
+}
+
+const onFileSelected = (selected: File | File[] | null) => {
+  const picked = Array.isArray(selected) ? selected[0] : selected
+  if (!picked) {
+    file.value = null
+    fileContent.value = ''
+    return
+  }
+  onFileAdded([picked])
 }
 
 const loadPackageFromUrl = async () => {
@@ -579,12 +586,16 @@ const submitForm = async () => {
   }
 }
 
+const listLoading = ref(false)
 const fetchData = async () => {
+  listLoading.value = true
   try {
     data.value = await apiFetch('/processes', { query: { f: 'json' }, acceptLanguage: locale.value })
   } catch (error) {
     console.error('Error fetching data:', error)
     Notify.create({ type: 'negative', message: errorSummary(error, t('Request failed')) })
+  } finally {
+    listLoading.value = false
   }
 }
 
@@ -718,6 +729,7 @@ const onClearSearch = async () => {
               :columns="columns"
               row-key="id"
               :dark="isDark"
+              :loading="listLoading"
               wrap-cells
               table-layout="fixed"
               flat
@@ -796,8 +808,8 @@ const onClearSearch = async () => {
               </template>
               <template #no-data>
                 <div class="full-width row flex-center text-grey-7 q-py-lg">
-                  <q-icon name="inbox" size="md" class="q-mr-sm" />
-                  {{ t('No process matches your search.') }}
+                  <q-icon :name="listLoading ? 'hourglass_empty' : 'inbox'" size="md" class="q-mr-sm" />
+                  {{ listLoading ? t('Loading...') : t('No process matches your search.') }}
                 </div>
               </template>
             </q-table>
@@ -1130,17 +1142,16 @@ const onClearSearch = async () => {
 
             <q-tab-panels v-model="deployMode" animated>
               <q-tab-panel name="file" class="q-pa-none">
-                <q-uploader
-                  ref="uploader"
+                <q-file
+                  v-model="file"
                   :label="t('Upload a .cwl file')"
                   accept=".cwl,.yaml,.yml,.json"
-                  flat
-                  bordered
-                  :hide-upload-btn="true"
-                  :hide-upload-progress="true"
-                  style="width: 100%;"
-                  @added="onFileAdded"
-                />
+                  filled
+                  clearable
+                  @update:model-value="onFileSelected"
+                >
+                  <template #prepend><q-icon name="upload_file" /></template>
+                </q-file>
               </q-tab-panel>
               <q-tab-panel name="paste" class="q-pa-none">
                 <q-input

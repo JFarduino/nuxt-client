@@ -41,6 +41,7 @@ import { useLayoutStore } from '~/stores/layout'
 import { useI18n } from 'vue-i18n'
 import { useCookie } from '#app'
 import { useQuasar } from 'quasar'
+import { darkPreference } from '~/composables/utils/theme'
 
 
 const options = [
@@ -74,7 +75,8 @@ watch(selectedLayout, (val) => {
 const $q = useQuasar()
 const darkCookie = useCookie<string>('dark_mode', { maxAge: 60 * 60 * 24 * 365 })
 // Without a cookie the theme follows the system: reflect the active state.
-const darkMode = ref(darkCookie.value === '1' || (darkCookie.value !== '0' && $q.dark.isActive))
+const preference = darkPreference(darkCookie.value)
+const darkMode = ref(preference === 'auto' ? $q.dark.isActive : preference)
 onMounted(() => {
   darkMode.value = $q.dark.isActive
 })

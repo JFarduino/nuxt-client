@@ -209,5 +209,17 @@
   "Hide": "Masquer",
   "Failed to load the OpenAPI document": "Échec du chargement du document OpenAPI",
   "Session expired": "Session expirée",
-  "Your session has expired. Sign in again to keep using your account.": "Votre session a expiré. Reconnectez-vous pour continuer avec votre compte."
+  "Your session has expired. Sign in again to keep using your account.": "Votre session a expiré. Reconnectez-vous pour continuer avec votre compte.",
+  "Conformance": "Conformité",
+  "Loading...": "Chargement…",
+  "Please fill all required inputs before submitting.": "Renseignez toutes les entrées obligatoires avant de soumettre.",
+  "Submitting job...": "Envoi du travail…",
+  "Submitting...": "Envoi…",
+  "Completed successfully": "Terminé avec succès",
+  "Job failed": "Le travail a échoué",
+  "Job was dismissed": "Le travail a été annulé",
+  "Network error: the server could not be reached (CORS or connection problem).": "Erreur réseau : le serveur est injoignable (problème CORS ou de connexion).",
+  "Process not found": "Processus introuvable",
+  "Back to the processes list": "Retour à la liste des processus",
+  "Request this output": "Demander cette sortie"
 }

@@ -206,6 +206,7 @@ import {
   isActiveStatus,
   jobDurationMs,
   relativeTime,
+  newestFirstWindow,
   resultsHref,
   statusColor,
   statusIcon
@@ -283,12 +284,13 @@ const fetchPage = async (page = pagination.value.page, rowsPerPage = pagination.
       return
     }
     const limit = rowsPerPage || 20
-    const result = await listJobs({
-      limit,
-      skip: (page - 1) * limit,
-      status: statusFilter.value,
-      processID: processFilter.value || undefined
-    })
+    const filters = { status: statusFilter.value, processID: processFilter.value || undefined }
+    // The server lists jobs oldest first and has no sort parameter: read the
+    // window from the end of the list so that page 1 shows the latest jobs.
+    const probe = await listJobs({ limit: 1, ...filters })
+    const total = Number(probe?.numberTotal ?? 0)
+    const window = newestFirstWindow(total, page, limit)
+    const result = await listJobs({ limit: window.limit, skip: window.skip, ...filters })
     let jobs = result?.jobs || []
     if (pagination.value.sortBy) {
       const key = pagination.value.sortBy
@@ -300,7 +302,7 @@ const fetchPage = async (page = pagination.value.page, rowsPerPage = pagination.
       ...pagination.value,
       page,
       rowsPerPage: limit,
-      rowsNumber: Number(result?.numberTotal ?? jobs.length)
+      rowsNumber: Number(result?.numberTotal ?? total)
     }
     now.value = Date.now()
   } catch (err) {

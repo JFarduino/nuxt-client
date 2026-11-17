@@ -209,5 +209,17 @@
   "Hide": "Hide",
   "Failed to load the OpenAPI document": "Failed to load the OpenAPI document",
   "Session expired": "Session expired",
-  "Your session has expired. Sign in again to keep using your account.": "Your session has expired. Sign in again to keep using your account."
+  "Your session has expired. Sign in again to keep using your account.": "Your session has expired. Sign in again to keep using your account.",
+  "Conformance": "Conformance",
+  "Loading...": "Loading...",
+  "Please fill all required inputs before submitting.": "Please fill all required inputs before submitting.",
+  "Submitting job...": "Submitting job...",
+  "Submitting...": "Submitting...",
+  "Completed successfully": "Completed successfully",
+  "Job failed": "Job failed",
+  "Job was dismissed": "Job was dismissed",
+  "Network error: the server could not be reached (CORS or connection problem).": "Network error: the server could not be reached (CORS or connection problem).",
+  "Process not found": "Process not found",
+  "Back to the processes list": "Back to the processes list",
+  "Request this output": "Request this output"
 }

@@ -47,3 +47,37 @@
 - The auth handler crashed at startup when the OIDC variables were missing; it now disables
   login instead. Redirects after login only go to same-origin URLs.
 - French locale name (`Français`).
+- Process page: optional inputs left disabled (bounding box defaults, `pause`...) were sent
+  anyway. Outputs can now be selected (*Request this output*) and follow the matching optional
+  input by default, so that `echo`-like services are not asked for empty outputs.
+- Process page: synchronous executions asked for every output and got a `multipart/related`
+  body back (which ZOO-Project sends without CORS headers); the UI now requests a JSON
+  `response: document`. The subscriber block was sent twice (`subscriber` and
+  `executionOptions.subscriber`), which leaves ZOO-Project CWL jobs stuck in `running`; only the
+  standard block is sent.
+- Process page: a WebSocket message about another job was taken as a successful completion, and
+  a progress message set the status to `running...`, hiding the *Dismiss* button. Polling,
+  dismiss and delete now go through the API client (bearer token, expired sessions, loading bar),
+  polling stops before a dismiss, *Delete job* no longer shows after a failed submission,
+  network errors (CORS, server down) are explained, an unknown process identifier shows an error
+  instead of an endless spinner, hard-coded English messages and debug logs are gone, and the
+  JSON-LD URL uses the current origin.
+- Jobs list: the server lists jobs oldest first and has no sort parameter, so the newest job
+  landed on the last page; the first page now shows the latest jobs.
+- Job page: the results panel of a failed job showed the exception document as if it were
+  outputs.
+- Dark mode was lost on every full page load: the cookie value was compared as the string `"1"`
+  while Nuxt's `useCookie` decodes it into the number `1`, and Quasar reset the theme after
+  hydration. The preference is now read with a tolerant helper (`composables/utils/theme.ts`)
+  and chosen before Quasar is installed (`plugins/00.quasar-theme.ts`), so the server markup
+  and the client agree.
+- Quasar's language pack follows the UI locale (table pagination and dialog buttons stayed in
+  English).
+- Processes list: a loading state instead of *No process matches your search* while loading, a
+  plain file picker instead of the uploader (no meaningless upload progress), the OpenAPI
+  document was requested twice on page load, and *Authenticate* goes straight to the identity
+  provider instead of the generic sign-in page.
+
+### Documentation
+- `docs/known-issues.md`: server-side problems found while testing the UI end to end, with
+  reproductions, so they can be reported to ZOO-Project.

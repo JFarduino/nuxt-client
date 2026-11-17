@@ -79,11 +79,15 @@ form generated from the process description:
   complex inputs by value (with a format selector) or by reference (`href`), and bounding
   boxes which can be drawn on a map (with CRS selection). Optional inputs must be enabled with
   their checkbox.
-- **Outputs** — transmission mode (`value` or `reference`) and format for each output.
+- **Outputs** — transmission mode (`value` or `reference`), format, and whether the output is
+  requested at all (*Request this output*). An output named like an optional input that is not
+  enabled is not requested unless you tick it: services such as `echo` return an empty output
+  otherwise, which the server cannot serialise.
 - **Notification endpoints** — subscriber URLs called by the server (filled automatically to
-  feed the live progress through WebSocket).
+  feed the live progress through WebSocket); they are only sent for asynchronous executions.
 - **Execution mode** — asynchronous (a job is created, recommended) or synchronous (the
-  response is returned directly); only the modes supported by the process are proposed.
+  response is returned directly as a JSON document, `response: document`); only the modes
+  supported by the process are proposed.
 
 **Show JSON preview** displays the exact execute request; it can be edited before sending and
 copied as a `curl` command. **Execute** sends the request. For asynchronous executions the
@@ -93,8 +97,10 @@ The execution response (or the error returned by the server) is shown at the bot
 
 ## Jobs
 
-The list is paginated on the server (10 to 100 rows per page) and can be filtered by
-**status**, by **process**, and searched within the current page. **Auto-refresh** reloads the
+The list is paginated on the server (10 to 100 rows per page), most recent jobs first (the
+server lists jobs oldest first without a sort parameter, so the UI reads the end of the list
+for the first page), and can be filtered by **status**, by **process**, and searched within
+the current page. **Auto-refresh** reloads the
 page every 5 seconds while jobs are running (every 30 seconds otherwise). Each row shows the
 status chip, a shortened job identifier (with a copy button), the process, the creation time
 (hover for the relative time), the duration and the server message. The actions open the job,
@@ -111,7 +117,7 @@ them at once.
 - **Results** (successful or failed jobs): one block per output — values, references (with an
   image preview when the reference is an image), GeoJSON features or bounding boxes drawn on a
   map, nested documents as JSON. The raw results document is available at the bottom. For
-  failed jobs the exception returned by the server is shown.
+  failed jobs the exception document returned by the server is shown as an error banner.
 - **Logs**: links of relation `related` (or plain text) published by the server, such as the
   per-step logs of CWL workflows, can be expanded inline.
 - **Links**: every other link of the job (status location, results location...).
@@ -127,8 +133,10 @@ resolved correctly. **Conformance** lists the conformance classes declared by th
 ## Settings
 
 The gear icon opens the settings: **language** (English / French), **dark mode** and the
-page **layout**. Preferences are kept in cookies. Without a choice the theme follows the
-system setting; `?theme=dark` or `?theme=light` in the address bar forces and remembers one.
+page **layout**. Preferences are kept in cookies and applied when the page is rendered on the
+server, so every page loads directly in the chosen theme and language (Quasar's own labels,
+such as the table pagination, follow the language too). Without a choice the theme follows
+the system setting; `?theme=dark` or `?theme=light` in the address bar forces and remembers one.
 
 If the UI server cannot assemble the OpenAPI document (no outbound access to the OGC schema
 hosts), Swagger shows the raw document and the references it cannot resolve are listed in a

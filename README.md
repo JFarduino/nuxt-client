@@ -33,7 +33,8 @@ Built with [Nuxt 3](https://nuxt.com), [Vue 3](https://vuejs.org), [Quasar](http
   with a sign-in prompt.
 - English and French, light and dark themes (following the system setting by default).
 
-See the [user guide](docs/user-guide.md) for a page-by-page description.
+See the [user guide](docs/user-guide.md) for a page-by-page description, and
+[docs/known-issues.md](docs/known-issues.md) for the server-side problems the UI works around.
 
 ## Quick start
 

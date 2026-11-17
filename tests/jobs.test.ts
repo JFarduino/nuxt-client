@@ -8,6 +8,8 @@ import {
   jobDurationMs,
   jobsQuery,
   linkRelLabel,
+  isExceptionDocument,
+  newestFirstWindow,
   nextSkip,
   normalizeStatus,
   resultsHref,
@@ -89,5 +91,30 @@ describe('jobs list query', () => {
   it('reads the skip of the next link', () => {
     expect(nextSkip({ jobs: [], links: [{ rel: 'next', href: 'http://x/jobs?limit=2&skip=2' }] })).toBe(2)
     expect(nextSkip({ jobs: [], links: [] })).toBeNull()
+  })
+})
+
+describe('isExceptionDocument', () => {
+  it('recognises OGC exception documents', () => {
+    expect(isExceptionDocument({ type: 'NoApplicableCode', title: 'NoApplicableCode', detail: 'boom' })).toBe(true)
+    expect(isExceptionDocument({ type: 'http://www.opengis.net/def/exceptions/x', title: 'NoSuchJob' })).toBe(true)
+  })
+  it('ignores result documents', () => {
+    expect(isExceptionDocument({ a: 'hello world' })).toBe(false)
+    expect(isExceptionDocument({ type: 'FeatureCollection', features: [] })).toBe(false)
+    expect(isExceptionDocument(null)).toBe(false)
+    expect(isExceptionDocument('text')).toBe(false)
+  })
+})
+
+describe('newestFirstWindow', () => {
+  it('reads the end of the list for page 1', () => {
+    expect(newestFirstWindow(32, 1, 20)).toEqual({ skip: 12, limit: 20 })
+    expect(newestFirstWindow(32, 2, 20)).toEqual({ skip: 0, limit: 12 })
+  })
+  it('handles small and empty lists', () => {
+    expect(newestFirstWindow(5, 1, 20)).toEqual({ skip: 0, limit: 5 })
+    expect(newestFirstWindow(0, 1, 20)).toEqual({ skip: 0, limit: 20 })
+    expect(newestFirstWindow(40, 3, 20)).toEqual({ skip: 0, limit: 1 })
   })
 })

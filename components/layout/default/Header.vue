@@ -33,9 +33,9 @@
               {{ t('Session expired') }}
             </q-chip>
             <q-btn v-if="isSmallScreen" class="q-px-sm" dense no-caps color="accent" round
-                   icon="mdi-account-circle" :href="`${authBase}/api/auth/signin`"/>
+                   icon="mdi-account-circle" @click="login"/>
             <q-btn v-else class="q-px-md" no-caps color="accent" :label="t('Authenticate')"
-                   :href="`${authBase}/api/auth/signin`"/>
+                   @click="login"/>
           </div>
           <div v-else-if="authStore.user" class="row items-center no-wrap">
             <span v-if="!isSmallScreen" class="text-grey-8 q-mr-xs ellipsis" style="max-width: 180px">
@@ -132,7 +132,9 @@ const stringToMD5 = useStringToMD5()
 
 const isProcessing = ref(false)
 const router = useRouter()
-const {signOut} = useAuth()
+const { signOut, signIn } = useAuth()
+// Go straight to the identity provider instead of the generic authjs sign-in page.
+const login = () => signIn('keycloak', { callbackUrl: window.location.href })
 
 const gravatarUrl = ref('https://www.gravatar.com/avatar/46d229b033af06a191ff2267bca9ae56/?d=identicon')
 
@@ -277,7 +279,7 @@ watch(() => authStore.sessionExpired, (expired) => {
     type: 'warning',
     timeout: 10000,
     message: t('Your session has expired. Sign in again to keep using your account.'),
-    actions: [{ label: t('Authenticate'), color: 'black', handler: () => { window.location.href = `${authBase}/api/auth/signin` } }]
+    actions: [{ label: t('Authenticate'), color: 'black', handler: login }]
   })
 })
 

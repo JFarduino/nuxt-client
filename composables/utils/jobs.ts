@@ -216,3 +216,30 @@ export function nextSkip(page: JobsPage | null | undefined): number | null {
     return null
   }
 }
+
+/**
+ * OGC API exception document ({ type, title, detail, status? }): the server
+ * answers the results request of a failed job with one, sometimes with a 200.
+ */
+export function isExceptionDocument(doc: any): boolean {
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return false
+  const keys = Object.keys(doc)
+  if (typeof doc.type !== 'string' || !('title' in doc || 'detail' in doc)) return false
+  const allowed = ['type', 'title', 'detail', 'status', 'instance', 'code', 'links']
+  return keys.every((key) => allowed.includes(key))
+}
+
+/**
+ * Window (`skip`/`limit`) to request so that page `page` holds the newest jobs
+ * of a server that lists them oldest first. Page 1 is the end of the list; the
+ * first page may be shorter when the total is not a multiple of `pageSize`.
+ */
+export function newestFirstWindow(total: number, page: number, pageSize: number): { skip: number; limit: number } {
+  const size = Math.max(1, Math.floor(pageSize) || 1)
+  const count = Math.max(0, Math.floor(total) || 0)
+  const current = Math.max(1, Math.floor(page) || 1)
+  if (!count) return { skip: 0, limit: size }
+  const end = Math.max(0, count - (current - 1) * size)
+  const skip = Math.max(0, end - size)
+  return { skip, limit: Math.max(1, end - skip) }
+}

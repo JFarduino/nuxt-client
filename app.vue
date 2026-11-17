@@ -4,11 +4,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useLayoutStore } from '~/stores/layout'
 import { useI18n } from 'vue-i18n'
-import { useCookie } from '#app'
+import { useCookie, useNuxtApp } from '#app'
 import { useQuasar } from 'quasar'
+// Explicit extensions: the production (nitro) build cannot resolve the bare paths.
+import quasarLangFr from 'quasar/lang/fr.js'
+import quasarLangEn from 'quasar/lang/en-US.js'
+import { darkPreference } from '~/composables/utils/theme'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.pm/dist/leaflet.pm.css'
 
@@ -69,17 +73,27 @@ const themeParam = String(route.query.theme || '')
 if (themeParam === 'dark' || themeParam === 'light') {
   darkCookie.value = themeParam === 'dark' ? '1' : '0'
 }
-if (darkCookie.value === '1') {
-  $q.dark.set(true)
-} else if (darkCookie.value === '0') {
-  $q.dark.set(false)
-} else {
-  $q.dark.set('auto')
+const applyTheme = () => {
+  $q.dark.set(darkPreference(darkCookie.value))
+}
+applyTheme()
+// Quasar re-applies its static `config.dark` once the SSR markup is hydrated,
+// which used to reset the cookie choice to light on every full page load.
+if (import.meta.client) {
+  useNuxtApp().hook('app:suspense:resolve', applyTheme)
 }
 
 if (langCookie.value && langCookie.value !== locale.value) {
-  locale.value = langCookie.value 
+  locale.value = langCookie.value
 }
+
+// Quasar components (table pagination, dialog buttons...) have their own
+// language pack: keep it aligned with the UI locale.
+const applyQuasarLang = (code: string) => {
+  $q.lang.set(String(code || '').toLowerCase().startsWith('fr') ? quasarLangFr : quasarLangEn)
+}
+applyQuasarLang(locale.value)
+watch(locale, applyQuasarLang)
 </script>
 
 

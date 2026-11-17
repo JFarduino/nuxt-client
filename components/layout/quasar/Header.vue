@@ -21,7 +21,7 @@
 
         <div v-if="!authStore.user">
           <q-btn class="q-ml-sm" dense no-caps color="accent"
-                 :label="t('Authenticate')" :href="`${authBase}/api/auth/signin`"/>
+                 :label="t('Authenticate')" @click="signIn('keycloak')"/>
         </div>
         <div v-else>
           <q-btn rounded dense flat>
@@ -97,7 +97,7 @@ const loggedUser = ref({email: 'mathereall@gmail.com'}) // TODO: Implement user 
 const $q = useQuasar()
 const stringToMD5 = useStringToMD5()
 const router = useRouter()
-const {signOut} = useAuth()
+const { signOut, signIn } = useAuth()
 
 const { landingLinks } = useLandingLinks()
 // Get baseURL from app config

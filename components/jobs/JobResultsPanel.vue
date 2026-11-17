@@ -92,7 +92,7 @@ import { useI18n } from 'vue-i18n'
 import CopyButton from '~/components/common/CopyButton.vue'
 import JsonBlock from '~/components/common/JsonBlock.vue'
 import GeoPreview from '~/components/common/GeoPreview.vue'
-import { resultsHref } from '~/composables/utils/jobs'
+import { isExceptionDocument, resultsHref } from '~/composables/utils/jobs'
 import type { OgcApiError } from '~/composables/utils/ogcError'
 
 const props = defineProps<{ jobId: string; status?: string | null; links?: any[] }>()
@@ -161,7 +161,22 @@ const load = async () => {
   loading.value = true
   error.value = null
   try {
-    results.value = await getJobResults(props.jobId)
+    const doc = await getJobResults(props.jobId)
+    // A failed job answers its results request with an exception document
+    // (sometimes with a 200): show it as an error, not as outputs.
+    if (isExceptionDocument(doc)) {
+      error.value = {
+        status: 200,
+        title: doc.title,
+        type: doc.type,
+        detail: doc.detail,
+        raw: doc,
+        message: doc.detail || doc.title || ''
+      } as OgcApiError
+      results.value = null
+    } else {
+      results.value = doc
+    }
   } catch (err: any) {
     error.value = err
     results.value = null

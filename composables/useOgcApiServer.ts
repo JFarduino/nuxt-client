@@ -37,6 +37,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Shared across composable instances: the OpenAPI server base rarely changes.
 let cachedServerBaseUrl: string | null = null
+// Pages fire several API calls at once on load: resolve the server base once.
+let pendingServerBaseUrl: Promise<string | null> | null = null
 
 export function useOgcApiServer() {
   const config = useRuntimeConfig()
@@ -147,20 +149,28 @@ export function useOgcApiServer() {
     if (!forceRefresh && cachedServerBaseUrl) {
       return cachedServerBaseUrl
     }
-
-    try {
-      const spec = await $fetch<OpenApiSpec>(`${config.public.NUXT_ZOO_BASEURL}/ogc-api/api`, {
-        headers: getRequestHeaders(acceptLanguage)
-      })
-
-      const rawServerUrl = spec?.servers?.find(server => server?.url)?.url
-      const resolvedServerUrl = rawServerUrl ? toAbsoluteServerUrl(rawServerUrl) : null
-
-      cachedServerBaseUrl = resolvedServerUrl
-      return resolvedServerUrl
-    } catch {
-      return null
+    if (!forceRefresh && pendingServerBaseUrl) {
+      return pendingServerBaseUrl
     }
+
+    pendingServerBaseUrl = (async () => {
+      try {
+        const spec = await $fetch<OpenApiSpec>(`${config.public.NUXT_ZOO_BASEURL}/ogc-api/api`, {
+          headers: getRequestHeaders(acceptLanguage)
+        })
+
+        const rawServerUrl = spec?.servers?.find(server => server?.url)?.url
+        const resolvedServerUrl = rawServerUrl ? toAbsoluteServerUrl(rawServerUrl) : null
+
+        cachedServerBaseUrl = resolvedServerUrl
+        return resolvedServerUrl
+      } catch {
+        return null
+      } finally {
+        pendingServerBaseUrl = null
+      }
+    })()
+    return pendingServerBaseUrl
   }
 
   const buildOgcApiUrl = async (path: string, options: OgcApiEndpointOptions = {}) => {
