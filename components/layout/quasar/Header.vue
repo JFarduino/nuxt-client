@@ -50,7 +50,7 @@
       <q-route-tab
         v-for="tab in homeTab"
         :key="tab.path"
-        :href="tab.path"
+        :to="tab.path"
         :label="t(tab.label)"
         no-caps
       />
@@ -63,7 +63,7 @@
         v-for="tab in rightTabs"
         :key="tab.path"
         :label="t(tab.label)"
-        :href="tab.path"
+        :to="tab.path"
         no-caps
       />
     </q-tabs>

@@ -28,34 +28,45 @@
          <div class="row items-center"> 
           <SettingsMenu />
 
-          <div class="q-pt-sm" style="padding-top: 36px;">
-            <LayoutSharedHeaderMenu :show="showHeaderMenu" @hide="showHeaderMenu = false"/>
-          </div>
-          <div v-if="!authStore.user">
+          <div v-if="!authStore.user && authConfigured" class="row items-center no-wrap">
+            <q-chip v-if="authStore.sessionExpired" dense color="warning" text-color="black" icon="schedule" class="q-mr-sm">
+              {{ t('Session expired') }}
+            </q-chip>
             <q-btn v-if="isSmallScreen" class="q-px-sm" dense no-caps color="accent" round
                    icon="mdi-account-circle" :href="`${authBase}/api/auth/signin`"/>
-            <q-btn v-else-if="!isLoggedUser" class="q-px-md" no-caps color="accent" :label="t('Authenticate')"
+            <q-btn v-else class="q-px-md" no-caps color="accent" :label="t('Authenticate')"
                    :href="`${authBase}/api/auth/signin`"/>
           </div>
-          <div v-else>
+          <div v-else-if="authStore.user" class="row items-center no-wrap">
+            <span v-if="!isSmallScreen" class="text-grey-8 q-mr-xs ellipsis" style="max-width: 180px">
+              {{ authStore.user.name || authStore.user.email }}
+            </span>
             <q-btn rounded dense flat>
               <q-avatar>
-                <img :src="gravatarUrl">
+                <img :src="gravatarUrl" :alt="authStore.user.email || ''">
               </q-avatar>
+              <q-menu>
+                <q-list dense style="min-width: 200px">
+                  <q-item>
+                    <q-item-section>
+                      <q-item-label class="text-weight-bold">{{ authStore.user.name || '—' }}</q-item-label>
+                      <q-item-label caption>{{ authStore.user.email }}</q-item-label>
+                    </q-item-section>
+                  </q-item>
+                  <q-separator/>
+                  <q-item clickable v-close-popup
+                    :href="`${config.public.NUXT_OIDC_ISSUER}/account/?referrer=${config.public.NUXT_OIDC_CLIENT_ID}&referrer_uri=${config.public.AUTH_ORIGIN}`"
+                    target="_blank" rel="noopener">
+                    <q-item-section avatar><q-icon name="manage_accounts" /></q-item-section>
+                    <q-item-section>{{ t('Profile') }}</q-item-section>
+                  </q-item>
+                  <q-item clickable v-close-popup @click="showLogoutDialog">
+                    <q-item-section avatar><q-icon name="logout" /></q-item-section>
+                    <q-item-section>{{ t('Logout') }}</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
             </q-btn>
-            <q-menu>
-              <q-list dense>
-                <q-item clickable v-close-popup 
-                  :href="`${config.public.NUXT_OIDC_ISSUER}/account/?referrer=${config.public.NUXT_OIDC_CLIENT_ID}&referrer_uri=${config.public.AUTH_ORIGIN}`"
-                  class="q-px-lg">
-                  <q-item-section class="q-px-sm">{{ t('Profile') }}</q-item-section>
-                </q-item>
-                <q-separator/>
-                <q-item clickable v-close-popup @click="showLogoutDialog">
-                  <q-item-section class="q-px-sm">{{ t('Logout') }}</q-item-section>
-                </q-item>
-              </q-list>
-            </q-menu>
           </div>
         </div>
       </div>
@@ -66,7 +77,8 @@
       <q-route-tab
         v-for="tab in homeTab"
         :key="tab.path"
-        :href="tab.path"
+        :to="tab.path"
+        exact
         :label="t(tab.label)"
         no-caps
       />
@@ -79,7 +91,7 @@
         v-for="tab in rightTabs"
         :key="tab.path"
         :label="t(tab.label)"
-        :href="tab.path"
+        :to="tab.path"
         no-caps
       />
     </q-tabs>
@@ -99,9 +111,7 @@ import { useAuthStore } from '~/stores/auth'
 import { useLandingLinks } from '~/composables/utils/useLandingLinks'
 
 const config = useRuntimeConfig()
-const showHeaderMenu = ref(false)
-const isLoggedUser = ref(false) // TODO: Implement user authentication and pinia storage of user data
-const loggedUser = ref({email: 'mathereall@gmail.com'}) // TODO: Implement user authentication and pinia storage of user data
+const { authConfigured } = useOgcApiServer()
 
 
 const authStore = useAuthStore()
@@ -259,6 +269,17 @@ const handleLogout = async () => {
 watch(() => authStore.user?.email, (email) => {
   updateGravatar(email)
 }, { immediate: true })
+
+// Tell the user once when the session died (expired token that could not be refreshed).
+watch(() => authStore.sessionExpired, (expired) => {
+  if (!expired || !import.meta.client) return
+  $q.notify({
+    type: 'warning',
+    timeout: 10000,
+    message: t('Your session has expired. Sign in again to keep using your account.'),
+    actions: [{ label: t('Authenticate'), color: 'black', handler: () => { window.location.href = `${authBase}/api/auth/signin` } }]
+  })
+})
 
 onMounted(() => {
   updateGravatar(authStore.user?.email)
