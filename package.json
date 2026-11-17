@@ -12,6 +12,7 @@
         "test": "vitest"
     },
     "dependencies": {
+        "@apidevtools/json-schema-ref-parser": "^14.2.1",
         "@auth/core": "^0.34.2",
         "@geoman-io/leaflet-geoman-free": "^2.18.3",
         "@mdi/js": "^7.4.47",
