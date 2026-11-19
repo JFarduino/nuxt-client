@@ -25,6 +25,14 @@
   Swagger UI's panel; version pills restyled; dark theme.
 - Theme: follows the system setting by default, `?theme=dark|light` forces and remembers a
   theme, dark variants for every surface (tables, dialogs, help texts, CWL preview).
+- Processes: the CWL workflow graph is now drawn by [cwl-svg](https://github.com/rabix/cwl-svg)
+  (the renderer of the Rabix Composer) through a new `CwlGraph` component: packed `$graph`
+  documents are resolved (step `run` references inlined), a single CommandLineTool is drawn as a
+  one-step workflow, automatic layout, zoom and pan, movable nodes, port names on hover, a
+  details panel for the selected node or link (types, documentation, command, container image,
+  ports, connections), light and dark themes in the brand colours, SVG export and full screen.
+  It replaces the hand-made scripts of `public/cwl-demo` under the processes list, and the deploy
+  dialog now draws the package being deployed while it is typed or after a file is picked.
 
 ### Fixed
 - Header tabs triggered a full page reload on every click (`href` instead of router links), so
@@ -97,6 +105,9 @@
   (tables were squeezed into one-letter columns); on phones the header tabs scroll on one line
   instead of wrapping and clipping the last tab.
 - Job page: on phones the header actions no longer overlap the job identifier.
+- Execution page: the *Show Raw JSON* block of the response stayed light grey in dark mode
+  (light text on a light background); every preformatted block now uses the theme's code
+  background.
 
 ### Documentation
 - `docs/known-issues.md`: server-side problems found while testing the UI end to end, with

@@ -238,10 +238,6 @@ watch(locale, applyQuasarLang)
 .body--dark .custom-table td {
   border-color: #333;
 }
-.body--dark #svg-container {
-  background: #1e1e1e;
-  border-color: #333 !important;
-}
 .body--dark .help-container {
   color: #e0e0e0 !important;
 }

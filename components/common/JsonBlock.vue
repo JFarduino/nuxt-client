@@ -33,15 +33,13 @@ const text = computed(() => {
 .json-block__pre {
   margin: 0;
   padding: 10px 12px;
-  background: #f4f4f4;
+  background: var(--surface-code, #f4f4f4);
+  color: inherit;
   border-radius: 8px;
   overflow: auto;
   font-size: 12.5px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
-}
-.body--dark .json-block__pre {
-  background: #1f1f1f;
 }
 </style>

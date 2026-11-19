@@ -43,8 +43,19 @@ version and kind:
 The icons under the kind badge recall the execution modes (`async`, `sync`) and whether jobs
 can be dismissed. The search box filters on identifier, title, description and keywords.
 
-Click a row to open the process page (built-in) or to preview the CWL workflow graph with its
-inputs and outputs (deployed). The **Actions** menu offers:
+Click a row to open the process page (built-in) or to preview the application package of a
+deployed process: its CWL workflow is drawn as an interactive graph (with
+[cwl-svg](https://github.com/rabix/cwl-svg), the renderer of the Rabix Composer), next to the
+process metadata, inputs and outputs. In the graph, inputs are the sand-coloured nodes, steps
+the brown ones and outputs the green ones; the links follow the data. Hovering a node shows
+the names of its ports, clicking a node or a link opens the details panel (type, documentation,
+command and container image of a step, ports and connections). The toolbar zooms, fits the
+graph to the view, rearranges it, downloads it as an SVG file, toggles the details panel and
+goes full screen; the mouse wheel zooms, dragging the background pans and nodes can be moved.
+Packed documents (`$graph`) are resolved and a single CommandLineTool is drawn as a one-step
+workflow. **Application Package** next to the title shows the raw CWL text.
+
+The **Actions** menu offers:
 
 - **View & execute** — open the process page.
 - **Jobs** — open the job list filtered on this process.
@@ -64,8 +75,9 @@ inputs and outputs (deployed). The **Actions** menu offers:
   (`application/ogcapppkg+json` with an `executionUnit.href`). Use **Preview** to fetch it in
   the browser first when the remote site allows it.
 
-The package is validated locally (`cwlVersion`, `class`/`$graph`) and summarised (identifier,
-class, CWL version, software version). The identifier declared in the package is proposed as
+The package is validated locally (`cwlVersion`, `class`/`$graph`), summarised (identifier,
+class, CWL version, software version) and drawn as a workflow graph, which follows the text as
+you edit it. The identifier declared in the package is proposed as
 process name; leave it or override it. After a successful deployment you are taken to the new
 process page. A `409` answer means a process with the same identifier already exists: use
 **Replace** instead.

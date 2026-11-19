@@ -2557,7 +2557,9 @@ function getFormatAndRef(input) {
 .response-pre {
   max-height: 480px;
   overflow: auto;
-  background: #f4f4f4;
+  /* theme token from app.vue: light grey by day, dark grey in dark mode */
+  background: var(--surface-code, #f4f4f4);
+  color: inherit;
   border-radius: 8px;
   padding: 10px;
   font-size: 12px;

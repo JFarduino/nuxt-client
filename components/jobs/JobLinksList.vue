@@ -94,13 +94,11 @@ const loadContent = async (index: number, link: any) => {
   overflow: auto;
   margin: 0;
   padding: 10px;
-  background: #f4f4f4;
+  background: var(--surface-code, #f4f4f4);
+  color: inherit;
   border-radius: 8px;
   font-size: 12px;
   white-space: pre-wrap;
   word-break: break-word;
-}
-.body--dark .link-content {
-  background: #1f1f1f;
 }
 </style>

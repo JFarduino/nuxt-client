@@ -7,6 +7,7 @@ import HelpDialog from '../../components/help/HelpDialog.vue'
 import processListHelp from '../../components/help/processListHelp.js'
 
 import AppDialog from '~/components/modal/AppDialog.vue'
+import CwlGraph from '~/components/common/CwlGraph.vue'
 
 import yaml from 'js-yaml'
 import { nextTick, watch } from 'vue'
@@ -37,10 +38,9 @@ const helpContent = processListHelp
 
 
 const loadingCwl = ref(false)
-const svgViewer = ref<any | null>(null)
+const cwlText = ref<string | null>(null)
+const cwlError = ref<string | null>(null)
 const selectedProcess = ref<Record<string, any> | null>(null)
-
-const zoomLevel = ref(1)
 
 const dialog = ref(false)
 const processName = ref('')
@@ -53,6 +53,15 @@ const deploying = ref(false)
 const uploader = ref<any>(null)
 
 const cwlSummary = computed(() => (fileContent.value?.trim() ? summarizeCwl(fileContent.value) : null))
+// The graph is redrawn from the pasted text, a little after the user stops typing.
+const graphSource = ref('')
+let graphTimer: ReturnType<typeof setTimeout> | null = null
+watch(fileContent, (text) => {
+  if (graphTimer) clearTimeout(graphTimer)
+  graphTimer = setTimeout(() => {
+    graphSource.value = text?.trim() ? text : ''
+  }, 600)
+}, { immediate: true })
 const cwlValidation = computed(() => (fileContent.value?.trim() ? validateCwlText(fileContent.value) : null))
 
 // Suggest the process identifier from the package itself.
@@ -132,88 +141,33 @@ const downloadCWL = () => {
   URL.revokeObjectURL(url);
 };
 
-// load cwl-svg demo bundles  
-const loadSvgScripts = async () => {
-  if (process.server || (window as any).svgScriptsLoaded) return
-  const loadScript = (src: string) =>
-    new Promise<void>((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = src
-      s.onload = () => resolve()
-      s.onerror = (e) => reject(new Error(`Failed to load ${src}`))
-      document.body.appendChild(s)
-    })
-
-  try {
-
-    if (!(window as any).jsyaml) {
-      const yamlModule = await import('js-yaml')
-      ;(window as any).jsyaml = yamlModule
-      console.log('✅ js-yaml exposed globally')
-    }
-    // order matters for your demo
-    await loadScript('/cwl-demo/cwl-svg.bundle.js')
-    await loadScript('/cwl-demo/cwl-svg-custom.js')
-    await loadScript('/cwl-demo/cwl-visualizer-api.js')
-    await loadScript('/cwl-demo/cwl-visualizer.js')
-    ;(window as any).svgScriptsLoaded = true
-    console.log('✅ CWL SVG bundles loaded')
-  } catch (err) {
-    console.error('Failed to load CWL scripts', err)
-    throw err
-  }
-}
-
-// visualization: fetch package and render 
+// Preview: fetch the process description and its application package; the graph
+// itself is drawn by <CwlGraph> (cwl-svg).
 const visualizeCwl = async (row: any) => {
   loadingCwl.value = true
-  await nextTick()
-
+  cwlText.value = null
+  cwlError.value = null
   try {
-    await loadSvgScripts()
-
-    //  Fetch the full process metadata (with inputs/outputs)
-    const metaUrl = await buildOgcApiUrl(`/processes/${row.id}`, {
-      acceptLanguage: locale.value
-    })
+    const metaUrl = await buildOgcApiUrl(`/processes/${row.id}`, { acceptLanguage: locale.value })
     const metaRes = await fetch(metaUrl, {
-      headers: {
-        Accept: 'application/json',
-        ...getRequestHeaders(locale.value)
-      }
+      headers: { Accept: 'application/json', ...getRequestHeaders(locale.value) }
     })
-    const metaData = await metaRes.json()
-    selectedProcess.value = metaData
- 
+    if (metaRes.ok) selectedProcess.value = await metaRes.json()
 
-    const url = await buildOgcApiUrl(`/processes/${row.id}/package`, {
-      acceptLanguage: locale.value
-    })
+    const url = await buildOgcApiUrl(`/processes/${row.id}/package`, { acceptLanguage: locale.value })
     const res = await fetch(url, {
-      headers: {
-        Accept: 'application/cwl+yaml',
-        ...getRequestHeaders(locale.value)
-      }
+      headers: { Accept: 'application/cwl+yaml', ...getRequestHeaders(locale.value) }
     })
     if (!res.ok) {
-      Notify.create({
-        type: 'warning',
-        message: t(
-          'CWL package cannot be accessed'
-        )
-      })
+      cwlError.value =
+        res.status === 404 || res.status === 406
+          ? t('Application package is not available. It may have been removed after a service restart.')
+          : t('Failed to load application package.')
       return
     }
-
-    const yamlText = await res.text()
-    const cwlObject = yaml.load(yamlText)
-    await nextTick()
-    renderCwl(yamlText)
-    if (!cwlObject.class) {
-      cwlObject.class = "Workflow"
-    }
+    cwlText.value = await res.text()
   } catch (err: any) {
-    showError(err?.message || 'Visualization failed')
+    cwlError.value = errorSummary(err, t('Unable to reach the server to retrieve the application package.'))
   } finally {
     loadingCwl.value = false
   }
@@ -296,67 +250,6 @@ const onRowClick = async (evt, row, index) => {
   await visualizeCwl(row)
 }
 
-
-
-
-// render into DOM 
-const renderCwl = async (yamlText: string) => {
-  const container = document.getElementById('svg-container');
-  if (!container) {
-    console.error('svg-container not found');
-    return;
-  }
-
-  let contentEl = document.getElementById('svg-content');
-  if (!contentEl) {
-    contentEl = document.createElement('div');
-    contentEl.id = 'svg-content';
-    container.appendChild(contentEl);
-  }
-
-  container.scrollTop = 0;
-
-  if (!(window).CWLSVGCustom) {
-    showError('CWLSVGCustom library not loaded');
-    return;
-  }
-
-  try {
-    svgViewer.value = new (window).CWLSVGCustom(contentEl, {
-      width: contentEl.clientWidth || 1200,
-      height: Math.max(600, contentEl.clientHeight || 600),
-      nodeWidth: 150,
-      nodeHeight: 70
-    });
-
-    // Pass the raw CWL YAML text
-    await svgViewer.value.loadWorkflow(yamlText);
-
-    if (typeof svgViewer.value.render === 'function') {
-      svgViewer.value.render();
-    }
-
-    console.log('✅ CWL rendered successfully');
-  } catch (e) {
-    console.error('Render error', e);
-    showError('Render failed: ' + e.message);
-  }
-}
-
-
-
-
-// file input handling (hidden input) 
-const handleFileInputChange = async (e: Event) => {
-  const input = e.target as HTMLInputElement
-  const fileSelected = input?.files?.[0]
-  if (!fileSelected) return
-  document.getElementById('file-name')!.innerText = fileSelected.name
-  document.getElementById('file-size')!.innerText = `(${(fileSelected.size / 1024).toFixed(1)} KB)`
-  const text = await fileSelected.text()
-  await loadSvgScripts()
-  renderCwl(text)
-}
 
 
 
@@ -815,19 +708,29 @@ const onClearSearch = async () => {
             </q-table>
             <!-- CWL Preview Section (UNDER the table) -->
             <div v-if="selectedProcess" class="row q-col-gutter-lg q-mt-lg">
-              <div class="col-8">
-
-              <h5 class="text-weight-bold">{{ t('CWL Preview') }}</h5>
-
-              <div id="svg-container"
-                  style="width: 100%; height: 600px; overflow: auto; border: 1px solid #ddd;">
-                <div id="svg-content"></div>
-              </div>
-
-              
+              <div class="col-12 col-md-8">
+                <div class="row items-center q-mb-sm">
+                  <div class="text-h6 text-weight-bold">{{ t('CWL Preview') }}</div>
+                  <q-space />
+                  <q-btn
+                    v-if="cwlText"
+                    flat
+                    dense
+                    no-caps
+                    icon="code"
+                    :label="t('Application Package')"
+                    @click="packageProcess(selectedProcess)"
+                  />
+                </div>
+                <q-banner v-if="cwlError" dense rounded class="bg-orange-1 text-orange-10">
+                  <template #avatar><q-icon name="warning" color="warning" /></template>
+                  {{ cwlError }}
+                </q-banner>
+                <q-skeleton v-else-if="loadingCwl" type="rect" height="560px" class="rounded-borders" />
+                <CwlGraph v-else-if="cwlText" :cwl="cwlText" :name="selectedProcess?.id" height="560px" />
               </div>
               <!-- Right: metadata -->
-              <div class="col-4 q-mt-xl">
+              <div class="col-12 col-md-4">
                 <q-card flat bordered>
                   <q-card-section>
                     <p class="text-h6 text-weight-bold">{{ t('Metadata') }}</p>
@@ -859,9 +762,9 @@ const onClearSearch = async () => {
                     <table class="custom-table">
                       <thead>
                         <tr>
-                          <th>Label</th>
-                          <th>Type</th>
-                          <th>Description</th>
+                          <th>{{ t('Label') }}</th>
+                          <th>{{ t('Type') }}</th>
+                          <th>{{ t('Description') }}</th>
                         </tr>
                       </thead>
 
@@ -887,7 +790,7 @@ const onClearSearch = async () => {
                         </tr>
 
                         <tr v-if="!Object.keys(selectedProcess?.inputs || {}).length">
-                          <td colspan="3" class="text-center text-grey">No inputs</td>
+                          <td colspan="3" class="text-center text-grey">{{ t('No inputs') }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -901,9 +804,9 @@ const onClearSearch = async () => {
                     <table class="custom-table">
                       <thead>
                         <tr>
-                          <th>Label</th>
-                          <th>Type</th>
-                          <th>Description</th>
+                          <th>{{ t('Label') }}</th>
+                          <th>{{ t('Type') }}</th>
+                          <th>{{ t('Description') }}</th>
                         </tr>
                       </thead>
 
@@ -929,7 +832,7 @@ const onClearSearch = async () => {
                         </tr>
 
                         <tr v-if="!Object.keys(selectedProcess?.outputs || {}).length">
-                          <td colspan="3" class="text-center text-grey">No outputs</td>
+                          <td colspan="3" class="text-center text-grey">{{ t('No outputs') }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -1111,7 +1014,7 @@ const onClearSearch = async () => {
 
     <!-- Add / Replace Process Dialog -->
     <q-dialog v-model="dialog" persistent>
-      <q-card style="min-width: 760px; max-width: 92vw;">
+      <q-card style="width: 760px; max-width: 92vw;">
         <q-card-section class="row items-center">
           <q-icon :name="replaceTarget ? 'published_with_changes' : 'add_circle'" color="primary" size="sm" class="q-mr-sm" />
           <div class="text-h6">
@@ -1190,6 +1093,11 @@ const onClearSearch = async () => {
                 <q-chip v-if="cwlSummary?.cwlVersion" dense outline color="grey-8">{{ cwlSummary.cwlVersion }}</q-chip>
                 <q-chip v-if="cwlSummary?.version" dense outline color="grey-8">v{{ cwlSummary.version }}</q-chip>
                 <q-chip v-if="cwlSummary?.graphSize" dense outline color="grey-8">$graph: {{ cwlSummary.graphSize }}</q-chip>
+              </div>
+              <!-- Live graph of the package about to be deployed -->
+              <div v-if="cwlValidation.ok && graphSource" class="q-mt-md">
+                <div class="text-caption text-grey-7 q-mb-xs">{{ t('Workflow graph') }}</div>
+                <CwlGraph :cwl="graphSource" height="300px" />
               </div>
             </div>
 

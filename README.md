@@ -15,7 +15,8 @@ Built with [Nuxt 3](https://nuxt.com), [Vue 3](https://vuejs.org), [Quasar](http
 - **Home**: service metadata from the OpenAPI document, capabilities badges (conformance
   classes), landing-page links.
 - **Processes**: searchable list (identifier, title, description, keywords), *Deployed* vs
-  *Built-in* badge, execution modes, CWL workflow preview, download of the application package.
+  *Built-in* badge, execution modes, interactive CWL workflow graph (drawn with
+  [cwl-svg](https://github.com/rabix/cwl-svg)), download of the application package.
 - **Deploy / Replace / Undeploy** (OGC API - Processes Part 2): deploy from a `.cwl` file, from
   pasted text or from a URL (the server downloads it), automatic identifier detection, CWL
   validation before sending, replace an existing process, undeploy with server error details.

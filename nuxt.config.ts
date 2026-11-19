@@ -32,6 +32,21 @@ export default defineNuxtConfig({
     vue: {
         compilerOptions: {}
     },
+    vite: {
+        optimizeDeps: {
+            // CommonJS libraries behind the workflow graph (components/common/CwlGraph.vue)
+            include: [
+                'cwl-svg/src/graph/workflow',
+                'cwl-svg/src/plugins/arrange/arrange',
+                'cwl-svg/src/plugins/edge-hover/edge-hover',
+                'cwl-svg/src/plugins/node-move/node-move',
+                'cwl-svg/src/plugins/selection/selection',
+                'cwl-svg/src/plugins/zoom/zoom',
+                'cwl-svg/src/utils/svg-dumper',
+                'cwlts/models'
+            ]
+        }
+    },
     modules: ["@pinia/nuxt", "nuxt-quasar-ui", "@sidebase/nuxt-auth","@nuxtjs/i18n"],
 
     i18n: {

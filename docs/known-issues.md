@@ -133,3 +133,23 @@ the deleted rows itself and refreshes the list a moment later.
 20-30 s). Deleting 13 jobs in a row left 13 messages in the queue; an `echo` job with `pause=1`
 submitted behind 8 of them completed after 284 s.
 
+## Added on 2026-11-19
+
+### `GET /processes/{id}/package` answers 406 for processes deployed anonymously (medium)
+
+With `Accept: application/cwl+yaml` (or any `application/cwl*` value) the kernel looks for
+`<processId>.cwl` next to `main.cfg`, then in the services namespace folder
+(`searchForFile`, `service_json.c`). For the anonymous namespace `getServicesNamespacePath`
+maps the namespace to the `main.cfg` folder itself (`/usr/lib/cgi-bin`), where no package copy
+is ever written, so every anonymous process answers `406 NotAcceptable` ("The resource is not
+available in the requested encoding") although its package exists at
+`/opt/zooservices_user/anonymous/<processId>/app-package.cwl`. In a user namespace the kernel
+keeps a copy at `/opt/zooservices_user/<user>/<processId>.cwl` after the deployment and the
+same request answers `200`. The UI shows its "package not available" message in that case.
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/cwl+yaml' \
+  http://localhost:8080/ogc-api/processes/hello-jules/package          # 406
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/cwl+yaml' \
+  http://localhost:8080/jules/ogc-api/processes/hello-jules/package    # 200 (even anonymously)
+```
