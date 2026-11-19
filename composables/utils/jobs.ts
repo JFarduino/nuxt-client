@@ -243,3 +243,61 @@ export function newestFirstWindow(total: number, page: number, pageSize: number)
   const skip = Math.max(0, end - size)
   return { skip, limit: Math.max(1, end - skip) }
 }
+
+/**
+ * ZOO-Project answers `/jobs/{id}/results` of a multi-output job executed in
+ * "raw" mode with a `Multipart/Related` document (its headers included in the
+ * body, labelled `application/json`). Turn it into an OGC results document:
+ * one entry per `Content-ID`, as `{ href, type }` for referenced parts and
+ * `{ value, mediaType }` for inline ones. Returns null when the text is not
+ * such a document.
+ */
+export function parseMultipartResults(text: unknown): Record<string, any> | null {
+  if (typeof text !== 'string') return null
+  const head = text.slice(0, 400)
+  const boundaryMatch = /^Content-Type:\s*multipart\/related;[^\n]*boundary="?([^";\r\n]+)"?/im.exec(head)
+  if (!boundaryMatch) return null
+  const boundary = boundaryMatch[1]
+  // The kernel writes the delimiter as `--` + boundary (boundary itself starts with `--`).
+  const parts = text.split('--' + boundary).slice(1)
+  const results: Record<string, any> = {}
+  for (let raw of parts) {
+    raw = raw.replace(/^--\s*$/, '')
+    if (!raw.trim()) continue
+    let headerBlock = raw
+    let body = ''
+    const split = raw.search(/\r?\n\r?\n/)
+    if (split >= 0) {
+      headerBlock = raw.slice(0, split)
+      body = raw.slice(split).replace(/^(\r?\n)+/, '')
+    }
+    const headers: Record<string, string> = {}
+    for (const line of headerBlock.split(/\r?\n/)) {
+      const m = /^([A-Za-z-]+):\s*(.*)$/.exec(line.trim())
+      if (m) headers[m[1].toLowerCase()] = m[2].trim()
+    }
+    const id = headers['content-id']
+    if (!id) continue
+    const mediaType = (headers['content-type'] || '').split(';')[0].trim() || undefined
+    if (headers['content-location']) {
+      results[id] = { href: headers['content-location'], type: mediaType }
+      continue
+    }
+    // The kernel puts `Content-Disposition` after the blank line: drop it from the body.
+    body = body.replace(/^Content-Disposition:[^\n]*\r?\n?/i, '').replace(/\r?\n$/, '')
+    let value: any = body
+    if (/json/i.test(mediaType || '') || /^\s*[\[{]/.test(body)) {
+      try {
+        value = JSON.parse(body)
+      } catch {
+        value = body
+      }
+    }
+    if (Array.isArray(value) && value.length === 4 && value.every((n) => typeof n === 'number')) {
+      value = { bbox: value }
+    }
+    results[id] = mediaType ? { value, mediaType } : { value }
+  }
+  return Object.keys(results).length ? results : null
+}
+

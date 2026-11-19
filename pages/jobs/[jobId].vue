@@ -25,16 +25,17 @@
                 <div class="col-auto">
                   <JobStatusChip :status="job.status" />
                 </div>
-                <div class="col">
+                <div class="col" style="min-width: 0">
                   <div class="text-h5 text-weight-bold">
                     <NuxtLink :to="`/processes/${job.processID}`" class="text-primary">{{ job.processID }}</NuxtLink>
                   </div>
                   <div class="text-caption text-grey-7 mono row items-center">
-                    <span>{{ job.jobID }}</span>
+                    <span style="word-break: break-all">{{ job.jobID }}</span>
                     <CopyButton :text="job.jobID" :label="t('Copy job ID')" />
                   </div>
                 </div>
-                <div class="col-auto row items-center q-gutter-xs">
+                <!-- On phones the actions take their own line instead of overlapping the identifier. -->
+                <div class="col-12 col-sm-auto row items-center justify-end q-gutter-xs">
                   <q-btn flat dense icon="refresh" :loading="loading" @click="load">
                     <q-tooltip>{{ t('Refresh') }}</q-tooltip>
                   </q-btn>

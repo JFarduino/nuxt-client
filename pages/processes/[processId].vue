@@ -938,7 +938,11 @@ const submitProcess = async () => {
       acceptLanguage: locale.value,
       headers: {
         "Content-Type": "application/json",
-        Prefer: preferMode.value + (preferMode.value == "respond-async" ? ";return=representation" : ""),
+        // No `return=representation` on asynchronous runs: asking ZOO-Project for
+        // the full response document (this preference or `response: document`)
+        // makes its worker crash after a CWL job succeeds, leaving the job in
+        // "running" forever; the job status is polled anyway.
+        Prefer: preferMode.value,
       },
       body: JSON.stringify(originalPayload),
     });
@@ -1037,7 +1041,19 @@ const copyAsCurl = async () => {
     const headers = getRequestHeaders(locale.value)
     const parts = [`curl -X POST '${executionUrl}'`, `-H 'Content-Type: application/json'`, `-H 'Prefer: ${preferMode.value}'`]
     if (headers.Authorization) parts.push(`-H 'Authorization: ${headers.Authorization}'`)
-    parts.push(`-d '${(jsonRequestPreview.value || '{}').replace(/'/g, "'\\''")}'`)
+    // The subscriber block only serves the UI's own WebSocket notifications
+    // (cluster-internal URLs): leave it out of a command meant to be run elsewhere.
+    let body = jsonRequestPreview.value || '{}'
+    try {
+      const parsed = JSON.parse(body)
+      if (parsed && typeof parsed === 'object') {
+        delete parsed.subscriber
+        body = JSON.stringify(parsed, null, 2)
+      }
+    } catch {
+      /* keep the preview text as is */
+    }
+    parts.push(`-d '${body.replace(/'/g, "'\\''")}'`)
     await copyToClipboard(parts.join(' \\\n  '))
     $q.notify({ type: 'positive', message: t('curl command copied') })
   } catch (err) {
@@ -1939,7 +1955,7 @@ function getFormatAndRef(input) {
               <q-checkbox
                 v-if="input.minOccurs === 0"
                 v-model="enabledInputs[inputId]"
-                :label="`Enable`"
+                :label="t('Enable')"
                 dense
               />
             </div>
@@ -1967,8 +1983,8 @@ function getFormatAndRef(input) {
                     <q-option-group
                       v-model="item.mode"
                       :options="[
-                        { label: 'Provide URL (href)', value: 'href' },
-                        { label: 'Provide Value Inline', value: 'value' }
+                        { label: t('Provide URL (href)'), value: 'href' },
+                        { label: t('Provide Value Inline'), value: 'value' }
                       ]"
                       type="radio"
                       inline
@@ -1997,13 +2013,13 @@ function getFormatAndRef(input) {
                       <q-select
                         v-model="item.format"
                         :options="item.availableFormats"
-                        label="Content Format"
+                        :label="t('Content Format')"
                         dense
                         filled
                       />
                       <q-input
                         v-model="item.value"
-                        label="Input Value"
+                        :label="t('Input Value')"
                         type="textarea"
                         autogrow
                         filled
@@ -2045,8 +2061,8 @@ function getFormatAndRef(input) {
                   <q-option-group
                     v-model="inputValues[inputId].mode"
                     :options="[
-                      { label: 'Provide URL (href)', value: 'href' },
-                      { label: 'Provide Value Inline', value: 'value' }
+                      { label: t('Provide URL (href)'), value: 'href' },
+                      { label: t('Provide Value Inline'), value: 'value' }
                     ]"
                     type="radio"
                     inline
@@ -2071,13 +2087,13 @@ function getFormatAndRef(input) {
                     <q-select
                       v-model="inputValues[inputId].format"
                       :options="inputValues[inputId].availableFormats"
-                      label="Content Format"
+                      :label="t('Content Format')"
                       dense
                       filled
                     />
                     <q-input
                       v-model="inputValues[inputId].value"
-                      label="Input Value"
+                      :label="t('Input Value')"
                       type="textarea"
                       autogrow
                       filled
@@ -2132,7 +2148,7 @@ function getFormatAndRef(input) {
                   <q-select
                     v-model="inputValues[inputId].crs"
                     :options="['EPSG:4326', 'EPSG:3857', 'EPSG:32611']"
-                    label="CRS / EPSG"
+                    :label="t('CRS / EPSG')"
                     filled
                     dense
                     emit-value
@@ -2278,7 +2294,7 @@ function getFormatAndRef(input) {
                 v-if="outputValues[outputId].length > 1"
                 v-model="outputValues[outputId][1].cval"
                 :options="outputValues[outputId][1].enum"
-                label="Format"
+                :label="t('Format')"
                 dense
                 class="q-ml-sm"
                 style="flex: 1"
@@ -2292,7 +2308,7 @@ function getFormatAndRef(input) {
                 v-if="outputValues[outputId].length > 0"
                 v-model="outputValues[outputId][0].cval"
                 :options="outputValues[outputId][0].enum"
-                label="Transmission"
+                :label="t('Transmission')"
                 dense
                 class="q-ml-sm"
                 style="flex: 1"
@@ -2305,10 +2321,10 @@ function getFormatAndRef(input) {
         <div class="q-mb-md">
           <q-card class="q-pa-md">
             <div class="row items-center q-mb-sm">
-              <div class="text-blue text-bold">NOTIFICATION ENDPOINTS</div>
+              <div class="text-blue text-bold">{{ t('Notification endpoints') }}</div>
               <q-space />
               <q-icon name="info" color="grey-6" size="sm">
-                <q-tooltip>URLs to receive status notifications</q-tooltip>
+                <q-tooltip>{{ t('URLs to receive status notifications') }}</q-tooltip>
               </q-icon>
             </div>
  
@@ -2316,12 +2332,12 @@ function getFormatAndRef(input) {
               <!-- Success URI -->
               <div class="q-gutter-sm row items-center">
                 <q-badge color="green" text-color="white">
-                  Success
+                  {{ t('Success') }}
                 </q-badge>
                 <q-input
                   filled
                   v-model="subscriberValues.successUri"
-                  label="Success URI"
+                  :label="t('Success URI')"
                   placeholder="URL called in case of success"
                   dense
                   @change="subscriberValues.successUri = $event.target.value"
@@ -2337,12 +2353,12 @@ function getFormatAndRef(input) {
               <!-- In Progress URI -->
               <div class="q-gutter-sm row items-center">
                 <q-badge color="orange" text-color="white">
-                  Progress
+                  {{ t('Progress') }}
                 </q-badge>
                 <q-input
                   filled
                   v-model="subscriberValues.inProgressUri"
-                  label="In Progress URI"
+                  :label="t('In Progress URI')"
                   placeholder="URL called during execution"
                   @change="subscriberValues.inProgressUri = $event.target.value"
                   dense
@@ -2358,12 +2374,12 @@ function getFormatAndRef(input) {
               <!-- Failed URI -->
               <div class="q-gutter-sm row items-center">
                 <q-badge color="red" text-color="white">
-                  Failed
+                  {{ t('Failed') }}
                 </q-badge>
                 <q-input
                   filled
                   v-model="subscriberValues.failedUri"
-                  label="Failed URI"
+                  :label="t('Failed URI')"
                   placeholder="URL called in case of failure"
                   @change="subscriberValues.failedUri = $event.target.value"
                   dense

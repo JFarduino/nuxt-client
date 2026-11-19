@@ -71,9 +71,11 @@
         </div>
       </div>
     </q-toolbar>
-<div class="row">
+<!-- One non-wrapping row: on narrow screens the tabs shrink and scroll
+     (arrows) instead of wrapping onto two lines and clipping the last one. -->
+<div class="row no-wrap items-center">
   <div class="col-auto">
-    <q-tabs dense align="left">
+    <q-tabs dense align="left" shrink>
       <q-route-tab
         v-for="tab in homeTab"
         :key="tab.path"
@@ -85,8 +87,8 @@
     </q-tabs>
   </div>
   <q-space/>
-  <div class="col-auto">
-    <q-tabs dense align="right">
+  <div class="col" style="min-width: 0">
+    <q-tabs dense align="right" shrink mobile-arrows outside-arrows>
       <q-route-tab
         v-for="tab in rightTabs"
         :key="tab.path"

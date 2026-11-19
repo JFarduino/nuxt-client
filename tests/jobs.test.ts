@@ -13,7 +13,8 @@ import {
   nextSkip,
   normalizeStatus,
   resultsHref,
-  statusColor
+  statusColor,
+  parseMultipartResults,
 } from '../composables/utils/jobs'
 
 describe('job status helpers', () => {
@@ -116,5 +117,29 @@ describe('newestFirstWindow', () => {
     expect(newestFirstWindow(5, 1, 20)).toEqual({ skip: 0, limit: 5 })
     expect(newestFirstWindow(0, 1, 20)).toEqual({ skip: 0, limit: 20 })
     expect(newestFirstWindow(40, 3, 20)).toEqual({ skip: 0, limit: 1 })
+  })
+})
+
+
+describe('parseMultipartResults', () => {
+  const sample =
+    'Content-Type: Multipart/Related; boundary="--job-1"; type=text/plain; start=a\r\nStatus: 200 OK\r\n\r\n' +
+    '----job-1\r\nContent-ID: a\r\nContent-Type: text/plain; charset=utf-8\r\nStatus: 200 OK\r\n\r\nContent-Disposition: INLINE\r\nBonjour' +
+    '----job-1\r\nContent-ID: b\r\nContent-Type: text/xml; charset=UTF-8\r\nContent-Location: http://host/temp/result-job-1.xml\r\n' +
+    '----job-1\r\nContent-ID: c\r\nContent-Type: text/plain; charset=utf-8\r\nStatus: 200 OK\r\n\r\nContent-Disposition: INLINE\r\n[ 2, 45, 3, 46 ]----job-1--\r\n'
+
+  it('turns the kernel multipart document into a results map', () => {
+    const doc = parseMultipartResults(sample)
+    expect(doc).toEqual({
+      a: { value: 'Bonjour', mediaType: 'text/plain' },
+      b: { href: 'http://host/temp/result-job-1.xml', type: 'text/xml' },
+      c: { value: { bbox: [2, 45, 3, 46] }, mediaType: 'text/plain' }
+    })
+  })
+
+  it('ignores anything else', () => {
+    expect(parseMultipartResults({ a: 1 })).toBeNull()
+    expect(parseMultipartResults('{"a": 1}')).toBeNull()
+    expect(parseMultipartResults('')).toBeNull()
   })
 })

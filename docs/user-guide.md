@@ -141,3 +141,13 @@ the system setting; `?theme=dark` or `?theme=light` in the address bar forces an
 If the UI server cannot assemble the OpenAPI document (no outbound access to the OGC schema
 hosts), Swagger shows the raw document and the references it cannot resolve are listed in a
 small banner above the documentation; expand *Details* to see them or close the banner.
+
+## Results of multi-output jobs
+
+Asynchronous jobs are executed in the default "raw" mode (asking ZOO-Project for the full
+response document crashes its worker, see `known-issues.md`). When such a job has several
+outputs, the server answers the results request with a `Multipart/Related` document: the job
+page splits it into one entry per output, with inline values, links to referenced files and a
+map for bounding boxes. CWL jobs answer with the STAC `FeatureCollection` of their outputs: it is
+shown on a map, with the list of the items' assets.
+

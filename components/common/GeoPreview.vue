@@ -72,15 +72,21 @@ const render = () => {
   }
 }
 
-onMounted(() => {
-  if (!mapEl.value) return
+const init = (el: HTMLElement | null) => {
+  if (!el || map) return
   map = new Map({
-    target: mapEl.value,
+    target: el,
     layers: [new TileLayer({ source: new OSM() })],
     view: new View({ center: fromLonLat([0, 20]), zoom: 1.5 })
   })
   render()
-})
+}
+
+// On a full page load `<ClientOnly>` renders its slot after this component's
+// own `onMounted`, so the container appears later: watch the ref instead of
+// relying on the mount hook alone (which left the map empty after a reload).
+onMounted(() => init(mapEl.value))
+watch(mapEl, (el) => init(el))
 
 watch(() => [props.geojson, props.bbox], render, { deep: true })
 

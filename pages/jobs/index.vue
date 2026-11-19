@@ -336,6 +336,12 @@ const deleteJobs = async (jobs: any[]) => {
     $q.notify({ type: 'positive', message: t('Job deleted successfully') })
   }
   selected.value = []
+  // The server may still list a job for a moment after its DELETE answered:
+  // drop the deleted rows right away and refresh the page a little later.
+  const deleted = new Set(jobs.map((job) => job.jobID))
+  rows.value = rows.value.filter((row) => !deleted.has(row.jobID))
+  pagination.value.rowsNumber = Math.max(0, (pagination.value.rowsNumber || 0) - jobs.length)
+  await new Promise((resolve) => setTimeout(resolve, 800))
   await fetchPage()
 }
 

@@ -221,5 +221,21 @@
   "Network error: the server could not be reached (CORS or connection problem).": "Network error: the server could not be reached (CORS or connection problem).",
   "Process not found": "Process not found",
   "Back to the processes list": "Back to the processes list",
-  "Request this output": "Request this output"
+  "Request this output": "Request this output",
+  "Enable": "Enable",
+  "Notification endpoints": "Notification endpoints",
+  "URLs to receive status notifications": "URLs to receive status notifications",
+  "Success URI": "Success URI",
+  "In Progress URI": "In Progress URI",
+  "Failed URI": "Failed URI",
+  "Transmission": "Transmission",
+  "Format": "Format",
+  "Success": "Success",
+  "Failed": "Failed",
+  "Provide URL (href)": "Provide URL (href)",
+  "Provide Value Inline": "Provide Value Inline",
+  "Content Format": "Content Format",
+  "Input Value": "Input Value",
+  "CRS / EPSG": "CRS / EPSG",
+  "Literal Input ({type})": "Literal Input ({type})"
 }

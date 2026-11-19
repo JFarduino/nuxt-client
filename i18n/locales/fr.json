@@ -221,5 +221,21 @@
   "Network error: the server could not be reached (CORS or connection problem).": "Erreur réseau : le serveur est injoignable (problème CORS ou de connexion).",
   "Process not found": "Processus introuvable",
   "Back to the processes list": "Retour à la liste des processus",
-  "Request this output": "Demander cette sortie"
+  "Request this output": "Demander cette sortie",
+  "Enable": "Activer",
+  "Notification endpoints": "Points de notification",
+  "URLs to receive status notifications": "URLs qui recevront les notifications de statut",
+  "Success URI": "URI de succès",
+  "In Progress URI": "URI de progression",
+  "Failed URI": "URI d'échec",
+  "Transmission": "Transmission",
+  "Format": "Format",
+  "Success": "Succès",
+  "Failed": "Échec",
+  "Provide URL (href)": "Fournir une URL (href)",
+  "Provide Value Inline": "Saisir la valeur",
+  "Content Format": "Format du contenu",
+  "Input Value": "Valeur",
+  "CRS / EPSG": "CRS / EPSG",
+  "Literal Input ({type})": "Valeur ({type})"
 }

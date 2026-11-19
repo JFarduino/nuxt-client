@@ -58,6 +58,24 @@
         <!-- geo -->
         <div v-else-if="entry.kind === 'geo'" class="q-pl-sm">
           <GeoPreview :geojson="entry.geojson" :bbox="entry.bbox" height="300px" />
+          <q-list v-if="assetLinks(entry.value).length" dense class="q-mt-sm">
+            <q-item v-for="asset in assetLinks(entry.value)" :key="asset.id" dense class="q-px-none">
+              <q-item-section avatar class="q-pr-sm" style="min-width: 0">
+                <q-icon :name="asset.isImage ? 'image' : 'attachment'" size="xs" color="grey-7" />
+              </q-item-section>
+              <q-item-section>
+                <q-item-label class="text-body2">
+                  <span class="text-weight-medium">{{ asset.title }}</span>
+                  <q-chip v-if="asset.mediaType" dense square outline color="grey-7" class="q-ml-xs">{{ asset.mediaType }}</q-chip>
+                </q-item-label>
+                <q-item-label caption class="break-all">
+                  <a v-if="/^https?:/i.test(asset.href)" :href="asset.href" target="_blank" rel="noopener" class="text-primary">{{ asset.href }}</a>
+                  <span v-else>{{ asset.href }}</span>
+                </q-item-label>
+                <q-img v-if="asset.isImage" :src="asset.href" class="q-mt-xs rounded-borders" style="max-width: 480px" fit="contain" />
+              </q-item-section>
+            </q-item>
+          </q-list>
           <q-expansion-item dense :label="t('Show JSON')" class="q-mt-sm">
             <JsonBlock :value="entry.value" />
           </q-expansion-item>
@@ -92,7 +110,7 @@ import { useI18n } from 'vue-i18n'
 import CopyButton from '~/components/common/CopyButton.vue'
 import JsonBlock from '~/components/common/JsonBlock.vue'
 import GeoPreview from '~/components/common/GeoPreview.vue'
-import { isExceptionDocument, resultsHref } from '~/composables/utils/jobs'
+import { isExceptionDocument, parseMultipartResults, resultsHref } from '~/composables/utils/jobs'
 import type { OgcApiError } from '~/composables/utils/ogcError'
 
 const props = defineProps<{ jobId: string; status?: string | null; links?: any[] }>()
@@ -121,8 +139,32 @@ const entries = computed(() => {
       ? []
       : [toEntry('result', doc)]
   }
+  // CWL (DRU) jobs answer with the STAC FeatureCollection itself, not with a
+  // map of outputs: show it as one geographic result instead of one entry per key.
+  if (isGeo(doc)) return [toEntry('result', doc)]
   return Object.entries(doc).map(([id, value]) => toEntry(id, value))
 })
+
+// STAC items carry their files in `assets`: list them as links under the map.
+const assetLinks = (value: any) => {
+  const features = value?.type === 'FeatureCollection' ? value.features || [] : value?.type === 'Feature' ? [value] : []
+  const links: { id: string; href: string; title: string; mediaType?: string; isImage: boolean }[] = []
+  for (const feature of features) {
+    for (const [key, asset] of Object.entries(feature?.assets || {})) {
+      const href = (asset as any)?.href
+      if (typeof href !== 'string') continue
+      const mediaType = (asset as any)?.type
+      links.push({
+        id: `${feature.id || 'item'}/${key}`,
+        href,
+        title: (asset as any)?.title || key,
+        mediaType,
+        isImage: isImageHref(href, mediaType) && /^https?:/i.test(href)
+      })
+    }
+  }
+  return links
+}
 
 function toEntry(id: string, raw: any) {
   let value = raw
@@ -175,7 +217,8 @@ const load = async () => {
       } as OgcApiError
       results.value = null
     } else {
-      results.value = doc
+      // Multi-output jobs run in "raw" mode answer with a multipart document.
+      results.value = parseMultipartResults(doc) ?? doc
     }
   } catch (err: any) {
     error.value = err

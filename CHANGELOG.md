@@ -78,6 +78,26 @@
   document was requested twice on page load, and *Authenticate* goes straight to the identity
   provider instead of the generic sign-in page.
 
+- Process page: asynchronous runs no longer ask for `return=representation` (ZOO-Project's
+  worker crashes after a successful CWL job when the full response document is requested, and
+  the job stays in `running`); *Copy as curl* leaves out the UI's own `subscriber` block; the
+  *Enable* checkboxes, the notification endpoints block, *Format* and *Transmission* are
+  translated.
+- Job page: the STAC `FeatureCollection` returned by CWL jobs is shown as one geographic result
+  (map, list of the items' assets) instead of raw `type` / `features` / `id` entries, and the map
+  now initialises after a full page load (the container is rendered after `onMounted`).
+- Jobs list: rows deleted in bulk disappear immediately instead of lingering until the next
+  refresh.
+- Job page: the `Multipart/Related` document that ZOO-Project returns for the results of a
+  multi-output job run in "raw" mode is split into one entry per output (value, link to the
+  referenced file, bounding box on the map) instead of being shown as one raw text value.
+- Process page: the input widgets (URL / inline value, content format, value, CRS) are
+  translated.
+- Layout: the alternative *Quasar* layout no longer reserves 600 px for two empty side drawers
+  (tables were squeezed into one-letter columns); on phones the header tabs scroll on one line
+  instead of wrapping and clipping the last tab.
+- Job page: on phones the header actions no longer overlap the job identifier.
+
 ### Documentation
 - `docs/known-issues.md`: server-side problems found while testing the UI end to end, with
   reproductions, so they can be reported to ZOO-Project.

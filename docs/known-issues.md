@@ -77,3 +77,59 @@ output named like a disabled optional input.
   status code).
 - French kernel message: « Le noyau ZOO-Kernel a exécuter votre service avec succès ! »
   (« a exécuté »).
+
+## Added on 2026-11-18 (second test campaign)
+
+### Asynchronous CWL job stuck in `running` when the full response document is requested (blocking)
+
+Asking for the response document on an asynchronous CWL (DRU) execution, either with
+`"response": "document"` in the body or with `Prefer: respond-async;return=representation`,
+makes the FPM worker crash right after the Python service succeeded: the job's
+`<process>_final_<id>.json` holds `Status: 500 Not Implemented ... receiving signal 11 = SIGSEGV`,
+the response file stays empty, `services.fstate` stays `Running` with no `end_time`, and
+`/jobs/{id}/results` answers `404 ResultNotReady` forever. Reproduced 5 times (anonymous and
+user namespace, with and without `subscriber`, after an FPM restart); the same request without
+`response` or with `response: raw` succeeds. This is the actual cause of the "stuck job" noted
+on 2026-11-17 (the duplicated `subscriber` was a coincidence). The UI no longer sends
+`return=representation` for asynchronous runs.
+
+```bash
+curl -s -X POST http://localhost:8080/ogc-api/processes/hello-jules/execution \
+  -H 'Content-Type: application/json' -H 'Prefer: respond-async' \
+  -d '{"inputs":{"name":"x"},"outputs":{"results":{"transmissionMode":"reference"}},"response":"document"}'
+# -> status stays "running" (progress 100, message "execution successful")
+```
+
+### Dismissing a running job re-executes it and blocks the worker (major)
+
+`DELETE /jobs/{id}` on a running job kills the FPM consumer; its unacknowledged RabbitMQ message
+goes back to `messages_ready` and the respawned consumer runs the (already deleted) job again.
+With the effective one-worker pool, every later job waits for that invisible re-execution:
+`echo` with `pause=1` measured at 31 s, 81 s, 84 s and 88 s after a dismiss (4 s otherwise).
+`rabbitmqctl purge_queue zoo_service_queue` only drops the `ready` messages.
+
+### About one second per OGC API request (medium)
+
+Every OGC API request (landing page, `/conformance`, `/processes`, `/jobs`...) takes 0.9-1 s
+while the WPS `GetCapabilities` answers in 0.2 s: the `securityIn` hook (`has_jwt_service=true`)
+imports `jwt`, `redis` and `requests` on each request (about 680 ms of Python imports measured
+in the kernel pod, on an emulated amd64 platform). The whole UI pays it on every call.
+
+### Internal `cwl_pack` listed as a process (minor)
+
+`cwl_pack` is the hook used by the multipart/related deployment (it reads `conf["cwl-parts"]`)
+but it is listed in `/processes`; executed from the UI it fails with `500 No message provided`
+(sync) or a `failed` job (async).
+
+### Deleted job still listed right after the DELETE (minor)
+
+Right after `DELETE /jobs/{id}` returns, `/jobs` may still list the job once; the UI now removes
+the deleted rows itself and refreshes the list a moment later.
+
+### Deleting finished jobs goes through the worker queue (medium)
+
+`DELETE /jobs/{id}` on a finished job answers `200` and publishes a message in
+`zoo_service_queue`; the worker picks these messages at its polling pace (about one every
+20-30 s). Deleting 13 jobs in a row left 13 messages in the queue; an `echo` job with `pause=1`
+submitted behind 8 of them completed after 284 s.
+
