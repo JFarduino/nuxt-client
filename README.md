@@ -6,9 +6,13 @@ It lets you browse processes, deploy CWL application packages, execute processes
 their jobs — with an optional OpenID Connect (Keycloak) login.
 
 Built with [Nuxt 3](https://nuxt.com), [Vue 3](https://vuejs.org), [Quasar](https://quasar.dev),
-[OpenLayers](https://openlayers.org) and [@sidebase/nuxt-auth](https://sidebase.io/nuxt-auth).
+[OpenLayers](https://openlayers.org), [cwl-svg](https://github.com/rabix/cwl-svg) and
+[@sidebase/nuxt-auth](https://sidebase.io/nuxt-auth).
 
-![Jobs list](docs/images/jobs-list.png)
+![Job page: a chronolayer run with its STAC result drawn on the map and its assets listed below](docs/images/job-page.png)
+
+*A finished job: status, timeline, and the STAC `FeatureCollection` it produced, drawn on the map
+with the cloud-optimized GeoTIFF and PNG assets listed underneath.*
 
 ## Features
 
@@ -36,6 +40,17 @@ Built with [Nuxt 3](https://nuxt.com), [Vue 3](https://vuejs.org), [Quasar](http
 
 See the [user guide](docs/user-guide.md) for a page-by-page description, and
 [docs/known-issues.md](docs/known-issues.md) for the server-side problems the UI works around.
+
+## Screenshots
+
+| | |
+|---|---|
+| **Processes** with their kind, version and execution modes ![Processes list](docs/images/processes-list.png) | **Workflow graph** of a selected process, drawn from its CWL package, with the inputs and outputs ![CWL preview](docs/images/cwl-preview.png) |
+| **Deploy dialog**: paste, upload or fetch a package, validated and drawn before it is sent ![Deploy dialog](docs/images/deploy-dialog.png) | **Execution form** generated from the process description, here a string and a bounding box ![Execution page](docs/images/process-page.png) |
+| **Jobs list** with status chips, durations, filters and auto-refresh ![Jobs list](docs/images/jobs-list.png) | **Dark theme**, following the system setting or forced with `?theme=dark` ![Job page in dark mode](docs/images/job-page-dark.png) |
+
+The screenshots come from the UI deployed by the [zoo-project-dru Helm chart](https://github.com/ZOO-Project/charts)
+on a local cluster, signed in through a Keycloak realm.
 
 ## Quick start
 
@@ -94,6 +109,8 @@ the UI next to the server when `webui.enabled=true` and maps the variables above
 npm run dev          # dev server with HMR
 npm run test         # vitest unit tests (tests/)
 npm run build        # production build in .output/
+npx nuxi preview     # serve the production build locally (loads .env)
+npm audit            # dependency advisories; see CHANGELOG.md for the current state
 ```
 
 The project layout, the data flow (auth store, `useOgcApiServer`, `useJobsApi`) and the
