@@ -34,6 +34,26 @@
   It replaces the hand-made scripts of `public/cwl-demo` under the processes list, and the deploy
   dialog now draws the package being deployed while it is typed or after a file is picked.
 
+### Security
+- Dependencies: `npm audit` went from 80 findings (11 critical, 36 high) to 8 moderate ones that
+  only Nuxt 4 fixes. Non-breaking updates applied with `npm audit fix` (quasar, vite, rollup,
+  vue 3.5.46, js-yaml, markdown-it, nanoid, tar, lodash, axios, unhead, yaml...). Major updates:
+  next-auth 4.24.15 (five advisories, among them the OAuth state/nonce/PKCE cookies not bound to
+  their provider; `next-auth/core` is aliased in `nuxt.config.ts` because the subpath is no longer
+  exported although @sidebase/nuxt-auth 0.9 still imports it), vue3-openlayers 12 (jspdf 4.2.1;
+  the stylesheets are now imported by the plugin), @nuxtjs/i18n 10 (vue-i18n 11.4.14),
+  nuxt-quasar-ui 3 (its component scan rejects the `*.hydration.fixtures` entries that Quasar
+  2.32+ lists and that broke `nuxt build`), happy-dom 21. Removed unused packages: `@nuxt/ui`
+  (not in the module list, pulled Tailwind), `@auth/core` (never imported) and `vue-uuid` (uuid
+  with no fixed release): the WebSocket channel identifier now comes from
+  `composables/utils/ids.ts` (`crypto.randomUUID()` with a `getRandomValues` fallback for plain
+  http origins). `minimatch` is forced to 11.0.1+ under swagger-client. `vue` is pinned to a
+  version range instead of `latest`.
+- Docker image: the runtime stage applies the Debian security updates and drops the npm CLI
+  (`npm`, `npx`, `corepack`), whose bundled dependencies (pacote, sigstore, ip-address,
+  brace-expansion...) accounted for most of the fixable findings of `docker scout cves`.
+  `.output/` is now ignored by git.
+
 ### Fixed
 - Header tabs triggered a full page reload on every click (`href` instead of router links), so
   the header disappeared and the landing links were fetched again at each navigation. They are

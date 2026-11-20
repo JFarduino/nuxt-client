@@ -5,13 +5,13 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { useRuntimeConfig } from '#imports'
 import { triggerRef } from 'vue'
-import { uuid } from 'vue-uuid';
 import { useQuasar } from 'quasar'
 import HelpDialog from '@/components/help/HelpDialog.vue'
 import processIdHelp from '@/components/help/processIdHelp.js'
 import { copyToClipboard } from 'quasar'
 import { normalizeStatus, isTerminalStatus } from '~/composables/utils/jobs'
 import { errorSummary } from '~/composables/utils/ogcError'
+import { randomId } from '~/composables/utils/ids'
  
  
 const {
@@ -46,7 +46,7 @@ const validationErrors = ref<Record<string, boolean>>({})
 const progressPercent = ref(0)
 const progressMessage = ref('')
 const jobId = ref("");
-const channelId = ref(uuid.v1());
+const channelId = ref(randomId());
 const $q = useQuasar()
 let ws: WebSocket | null = null
 const helpVisible = ref(false)
