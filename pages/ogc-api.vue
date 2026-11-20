@@ -25,7 +25,8 @@ const error = ref('')
 onMounted(async () => {
   try {
     await waitUntilReady()
-    data.value = await apiFetch('/', { query: { f: 'json' }, acceptLanguage: locale.value })
+    // No `f=json` here: the kernel answers 400 to it on the landing route (the other routes accept it).
+    data.value = await apiFetch('/', { acceptLanguage: locale.value })
   } catch (err) {
     error.value = errorSummary(err, t('Request failed'))
   }

@@ -129,6 +129,12 @@
   (light text on a light background); every preformatted block now uses the theme's code
   background.
 
+- Landing JSON page (`/ogc-api`): the request sent `f=json`, which the kernel refuses on the
+  landing route (`400`), so the page only showed an error; it now relies on the `Accept` header.
+- Process page: the number widget emits strings, so numeric literal inputs (`pause: "2"`) were
+  sent as JSON strings; they are now sent as numbers when the schema type is `number` or
+  `integer`.
+
 ### Documentation
 - `docs/known-issues.md`: server-side problems found while testing the UI end to end, with
   reproductions, so they can be reported to ZOO-Project.

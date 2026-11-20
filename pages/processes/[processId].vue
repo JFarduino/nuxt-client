@@ -737,7 +737,12 @@ watch(
           }
         }
       } else {
-        formattedInputs[key] = val
+        // Literal inputs: the number widget emits strings, the request wants JSON numbers
+        const type = data.value.inputs[key]?.schema?.type
+        formattedInputs[key] =
+          (type === 'number' || type === 'integer') && typeof val === 'string' && val.trim() !== '' && !Number.isNaN(Number(val))
+            ? Number(val)
+            : val
       }
     }
  

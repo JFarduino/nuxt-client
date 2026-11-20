@@ -153,3 +153,33 @@ curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/cwl+yaml' \
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/cwl+yaml' \
   http://localhost:8080/jules/ogc-api/processes/hello-jules/package    # 200 (even anonymously)
 ```
+
+## Added on 2026-11-20 (third test campaign, after the dependency upgrades)
+
+### Packed `$graph` documents are rejected by `POST /processes` (minor)
+
+A CWL document in packed form (`$graph` with the `Workflow` and its `CommandLineTool`s) sent
+with `Content-Type: application/cwl+yaml` answers `400 WorkflowNotFound` with the detail
+`Value is a array, but valid type for this field is an object` repeated five times, whatever
+the identifier of the workflow (`main`, `#main` or a custom one). The same workflow with the
+tool inlined in the step's `run` is accepted (`201`). The kernel itself stores every package in
+packed form (`app-package.cwl` of `hello-jules`) and the multipart/related deployment builds a
+packed document, so only the direct upload of a packed file is refused. The UI deploy dialog
+shows the server message; `cwltool --pack` users have to unpack their document first.
+
+```bash
+curl -s -X POST http://localhost:8080/ogc-api/processes -H 'Content-Type: application/cwl+yaml' \
+  -H 'Accept: application/json' --data-binary @packed.cwl -w '%{http_code}\n'      # 400
+```
+
+### `GET /ogc-api/?f=json` answers 400 (minor)
+
+The landing page refuses the `f=json` query parameter (`400 BadRequest`, "The resource is
+not available") while `/ogc-api/` with `Accept: application/json` answers `200` and the other
+routes (`/conformance`, `/jobs`, `/jobs/{id}`...) accept `f=json`. The UI's landing JSON page
+sent `f=json` and showed the error; it now relies on the `Accept` header only.
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/json' http://localhost:8080/ogc-api/          # 200
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/json' 'http://localhost:8080/ogc-api/?f=json' # 400
+```
