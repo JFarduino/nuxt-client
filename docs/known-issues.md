@@ -166,6 +166,9 @@ tool inlined in the step's `run` is accepted (`201`). The kernel itself stores e
 packed form (`app-package.cwl` of `hello-jules`) and the multipart/related deployment builds a
 packed document, so only the direct upload of a packed file is refused. The UI deploy dialog
 shows the server message; `cwltool --pack` users have to unpack their document first.
+Naming the workflow in the `w` query parameter works around it (`POST /processes?w=<workflow id>`
+answered `201` for a packed `helloworld_pipeline` on 2026-11-24); the deploy dialog sends it
+when it detects the identifier.
 
 ```bash
 curl -s -X POST http://localhost:8080/ogc-api/processes -H 'Content-Type: application/cwl+yaml' \
@@ -182,4 +185,39 @@ sent `f=json` and showed the error; it now relies on the `Accept` header only.
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/json' http://localhost:8080/ogc-api/          # 200
 curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: application/json' 'http://localhost:8080/ogc-api/?f=json' # 400
+```
+
+## Added on 2026-11-24
+
+### Tool log links answer 500 when the process identifier contains `_` (medium)
+
+The `related` links of a CWL job ("Tool log step_x.log") point to
+`<tmpUrl>/<process identifier>-<job id>/<log>`, but the runner copies the logs into its working
+directory, named after the job's Kubernetes namespace: `_` becomes `-` and the name is cut to 63
+characters. For `helloworld_pipeline` the links use `helloworld_pipeline-<job id>` while the
+files are in `helloworld-pipeline-<job id>`, so every log answers `500` ("Unable to access the
+file"). The UI shows the server error in the *Logs* panel. The URL is built in
+`CommonExecutionHandler.handle_outputs()` of zoo-template-common (0.1.8, also on `main`);
+building it from the real location of each file fixes it:
+`os.path.join(tmpUrl, os.path.relpath(os.path.abspath(tool_log), conf["main"]["tmpPath"]))`.
+Jobs already run keep the wrong URLs in `<job id>_logs.cfg`.
+
+```bash
+# job of helloworld_pipeline: the published link, then the real folder
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/<user>/temp/helloworld_pipeline-<job id>/step_2stac.log   # 500
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/<user>/temp/helloworld-pipeline-<job id>/step_2stac.log   # 200
+```
+
+### Empty process description replaced by the translation header in French (minor)
+
+A process deployed without CWL `doc` has an empty description. With `Accept-Language: fr-FR`
+the kernel returns the header of its French message catalog instead (`Project-Id-Version:
+ZOO-Kernel Internationalization ...`), shown as is in the processes list and the metadata
+panel: `service_json.c` passes the value to `gettext`, which returns the catalog header for an
+empty string. In English the description stays empty. Translating only non-empty values fixes it.
+
+```bash
+curl -s -H 'Accept: application/json' -H 'Accept-Language: fr-FR' \
+  http://localhost:8080/ogc-api/processes/helloworld_pipeline | jq -r .description | head -1
+# Project-Id-Version: ZOO-Kernel Internationalization
 ```
