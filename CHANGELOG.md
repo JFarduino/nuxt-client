@@ -149,6 +149,11 @@
   measures the canvas position only once, when the graph is created. It is now measured again at
   each drag start, and edge panning moves at half its former speed.
 
+- Swagger page, dark mode: the text typed in the parameter fields was invisible. The page switches
+  to `color-scheme: dark`, which turns the text of native fields white, Swagger UI paints the
+  fields white, and the inversion filter of the dark theme then made both dark. Swagger UI keeps
+  the light scheme inside its own block and is inverted as a whole.
+
 ### Documentation
 - `docs/known-issues.md`: server-side problems found while testing the UI end to end, with
   reproductions, so they can be reported to ZOO-Project.

@@ -270,9 +270,13 @@ onBeforeUnmount(() => {
   text-transform: none;
 }
 
-/* Dark theme: Swagger UI only ships a light theme, invert it and keep brand hues readable. */
+/* Dark theme: Swagger UI only ships a light theme, invert it and keep brand hues readable.
+   The page itself switches to `color-scheme: dark`, which makes the text of native fields white;
+   Swagger UI paints those fields white too, so after the inversion the typed text was dark on a
+   dark field. Inside Swagger UI the fields keep the light scheme and are inverted with the rest. */
 .body--dark #swagger-ui .swagger-ui {
   filter: invert(0.9) hue-rotate(180deg);
+  color-scheme: light;
 }
 .body--dark #swagger-ui .swagger-ui img,
 .body--dark #swagger-ui .swagger-ui .highlight-code,
