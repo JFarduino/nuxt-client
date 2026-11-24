@@ -53,6 +53,14 @@
   (`npm`, `npx`, `corepack`), whose bundled dependencies (pacote, sigstore, ip-address,
   brace-expansion...) accounted for most of the fixable findings of `docker scout cves`.
   `.output/` is now ignored by git.
+- Content-Security-Policy: the UI server sends a `Content-Security-Policy` header whose
+  `connect-src` only allows the UI itself, the ZOO-Project API, `websocketd`, the identity
+  provider, `epsg.io` and `raw.githubusercontent.com`, so the bearer token can no longer be sent
+  to another server by a link of a job (the API client attaches it to any absolute URL). The
+  policy comes from `config/csp.json`, read at runtime and reloaded when it changes: replace it
+  at deployment time (ConfigMap, bind mount) or point `NUXT_CSP_CONFIG_FILE` to another file.
+  Placeholders `{ZOO_API}`, `{ZOO_WS}` and `{OIDC_ISSUER}` follow the UI settings; a report-only
+  mode helps to try stricter policies. See `docs/configuration.md`.
 
 ### Fixed
 - Header tabs triggered a full page reload on every click (`href` instead of router links), so

@@ -35,6 +35,9 @@ RUN apt-get update -qq \
 
 # Ownership set at copy time (avoids slow `chown -R` layer).
 COPY --from=builder --chown=node:node /usr/src/app/.output ./.output
+# Default Content-Security-Policy, read at runtime: replace it at deployment time
+# (mount a file over it, or point NUXT_CSP_CONFIG_FILE elsewhere).
+COPY --from=builder --chown=node:node /usr/src/app/config ./config
 
 USER node
 

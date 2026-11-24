@@ -393,7 +393,7 @@ const loadPackageFromUrl = async () => {
     Notify.create({
       type: 'warning',
       timeout: 8000,
-      message: t('Could not fetch the package in the browser (CORS?). It will be fetched by the server instead.')
+      message: t('Could not fetch the package in the browser (CORS, or an origin missing from the Content-Security-Policy). It will be fetched by the server instead.')
     })
   }
 }

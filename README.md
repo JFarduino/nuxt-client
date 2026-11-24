@@ -81,9 +81,10 @@ All settings are environment variables read at **runtime** (no rebuild needed wh
 | `NUXT_OIDC_ISSUER` | OpenID Connect issuer, e.g. `https://auth.example.org/realms/zooproject` |
 | `NUXT_OIDC_CLIENT_ID` / `NUXT_OIDC_CLIENT_SECRET` | Confidential OIDC client used by the server side of the UI |
 | `NUXT_APP_BASE_URL` | Base path when the UI is served under a sub path (build time) |
+| `NUXT_CSP_CONFIG_FILE` | JSON file of the `Content-Security-Policy` sent by the UI (default `config/csp.json`, reloaded when it changes) |
 
-Details, Keycloak client requirements and the Helm chart mapping are in
-[docs/configuration.md](docs/configuration.md).
+Details, Keycloak client requirements, the Content-Security-Policy file and the Helm chart
+mapping are in [docs/configuration.md](docs/configuration.md).
 
 ## Running in production
 

@@ -24,6 +24,96 @@ unresolved references in a banner).
 The ZOO-Project must answer with CORS headers (`cors=true` in `main.cfg`, enabled in the Helm
 chart) since the browser calls it directly.
 
+## Content-Security-Policy
+
+The UI server sends a `Content-Security-Policy` header with every response. The default
+policy limits the servers the page's JavaScript may contact (`connect-src`): the UI itself, the
+ZOO-Project API, `websocketd`, the identity provider, `epsg.io` (projection definitions) and
+`raw.githubusercontent.com` (package preview in the deploy dialog). The browser refuses any
+other request before sending it, so the user's bearer token cannot leave for another server,
+even if a job or a result links to one.
+
+The policy is read from a JSON file at runtime, so it can be changed at deployment time
+without rebuilding the image:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NUXT_CSP_CONFIG_FILE` | `config/csp.json` (`/usr/src/app/config/csp.json` in the image) | Policy file. |
+
+Default file (`config/csp.json`):
+
+```json
+{
+  "enabled": true,
+  "reportOnly": false,
+  "directives": {
+    "connect-src": ["'self'", "{ZOO_API}", "{ZOO_WS}", "{OIDC_ISSUER}", "https://epsg.io", "https://raw.githubusercontent.com"],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "frame-ancestors": ["'self'"]
+  }
+}
+```
+
+- `directives`: one entry per CSP directive. The value is a list of sources, a string of
+  sources separated by spaces, `true` for directives without value (`upgrade-insecure-requests`)
+  or `false` to leave the directive out. A directive left without any source is sent as `'none'`.
+- Placeholders, replaced by the origin (`scheme://host:port`) of the matching variable, and
+  dropped when the variable is not set: `{ZOO_API}` (`NUXT_ZOO_BASEURL`), `{ZOO_WS}`
+  (`NUXT_WS_URL`, `http(s)` turned into `ws(s)`), `{OIDC_ISSUER}` (`NUXT_OIDC_ISSUER`).
+- `reportOnly: true` sends `Content-Security-Policy-Report-Only` instead: the browser reports
+  the violations in its console without blocking anything. Use it to try a stricter policy.
+- `enabled: false` sends no header.
+- Keys starting with `$` (`$comment`) are ignored.
+
+The file is checked for changes every 5 seconds, so an update is applied without restarting
+the server. When the file is missing, the policy built into the image (the `config/csp.json`
+of the build) applies. When it is invalid, the built-in policy applies too and the server logs
+the error (`[csp] ... is invalid`); invalid directives or sources are dropped with a warning.
+
+Add an origin to `connect-src` when the page must call another server: an API served from
+another host than `NUXT_ZOO_BASEURL` (OpenAPI `servers` entry), a WebSocket URL derived from the
+page host (`NUXT_WS_URL` not set), or the hosts of the packages previewed by URL in the deploy
+dialog. A blocked preview is not fatal: the dialog says so and the ZOO-Project server fetches
+the package itself when it is deployed.
+
+### Changing the policy with the Helm chart
+
+Create a ConfigMap from your file, then mount it with the chart's `webui.volumes`,
+`webui.volumeMounts` and `webui.extraEnv` values:
+
+```bash
+kubectl create configmap zoo-webui-csp -n <namespace> --from-file=csp.json=./csp.json
+# later updates
+kubectl create configmap zoo-webui-csp -n <namespace> --from-file=csp.json=./csp.json \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+```yaml
+webui:
+  extraEnv:
+    - name: NUXT_CSP_CONFIG_FILE
+      value: /etc/zoo-webui/csp.json
+  volumes:
+    - name: webui-csp
+      configMap:
+        name: zoo-webui-csp
+        optional: true   # without the ConfigMap, the built-in policy applies
+  volumeMounts:
+    - name: webui-csp
+      mountPath: /etc/zoo-webui
+      readOnly: true
+```
+
+Mount the ConfigMap as a directory, not with `subPath`: Kubernetes only refreshes directory
+mounts, and the UI then applies the new policy within about a minute.
+
+With Docker, bind-mount the file over the default one:
+
+```bash
+docker run -v "$PWD/csp.json:/usr/src/app/config/csp.json:ro" ... zooproject/nuxt-client
+```
+
 ## Authentication (OpenID Connect)
 
 | Variable | Description |

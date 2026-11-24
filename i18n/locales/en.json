@@ -169,7 +169,7 @@
   "Please provide the URL of the application package.": "Please provide the URL of the application package.",
   "Invalid application package": "Invalid application package",
   "Package loaded, review it before deploying.": "Package loaded, review it before deploying.",
-  "Could not fetch the package in the browser (CORS?). It will be fetched by the server instead.": "Could not fetch the package in the browser (CORS?). It will be fetched by the server instead.",
+  "Could not fetch the package in the browser (CORS, or an origin missing from the Content-Security-Policy). It will be fetched by the server instead.": "Could not fetch the package in the browser (CORS, or an origin missing from the Content-Security-Policy). It will be fetched by the server instead.",
   "Replace process \"{id}\"": "Replace process \"{id}\"",
   "Paste": "Paste",
   "From a URL": "From a URL",
