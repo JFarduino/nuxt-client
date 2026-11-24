@@ -252,7 +252,7 @@ const render = async () => {
       plugins: [
         new l.SVGArrangePlugin(),
         new l.SVGEdgeHoverPlugin(),
-        new l.SVGNodeMovePlugin({ movementSpeed: 10 }),
+        createNodeMovePlugin(l),
         selection,
         new l.ZoomPlugin()
       ]
@@ -269,6 +269,36 @@ const render = async () => {
   } finally {
     if (token === renderToken) loading.value = false
   }
+}
+
+/**
+ * Node dragging with cwl-svg's edge panning: when a dragged node gets near an edge, the canvas
+ * pans that way. The panner measures the canvas position once, when the graph is created, and
+ * never again: after the page has scrolled, it believes the cursor is beyond an edge and pans
+ * non-stop (the dragged node then races across the graph). Measure it again at each drag start,
+ * and pan at a speed the eye can follow.
+ */
+const createNodeMovePlugin = (l: Lib) => {
+  const plugin = new l.SVGNodeMovePlugin({ movementSpeed: 5 })
+  const startDrag = plugin.boundMoveStartHandler
+  plugin.boundMoveStartHandler = (event: MouseEvent, handle: Element) => {
+    startDrag(event, handle)
+    const panner = plugin.edgePanner
+    if (panner && svgEl.value) {
+      panner.stop()
+      panner.collision = { x: 0, y: 0 }
+      panner.viewportClientRect = svgEl.value.getBoundingClientRect()
+    }
+  }
+  return plugin
+}
+
+/**
+ * cwl-svg zooms on the wheel without cancelling the event, so the page scrolled at the same
+ * time. Over the graph, the wheel only zooms the graph (pinch included).
+ */
+const onWheel = (event: WheelEvent) => {
+  if (ready.value) event.preventDefault()
 }
 
 /**
@@ -454,6 +484,8 @@ const onFullscreenChange = () => {
 
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange)
+  // Capture phase: cwl-svg stops the wheel event's propagation in that phase.
+  svgEl.value?.addEventListener('wheel', onWheel, { passive: false, capture: true })
   if (typeof ResizeObserver !== 'undefined' && svgEl.value) {
     resizeObserver = new ResizeObserver(() => scheduleFit())
     resizeObserver.observe(svgEl.value)
@@ -467,6 +499,7 @@ watch(panelOpen, () => nextTick(scheduleFit))
 onBeforeUnmount(() => {
   renderToken++
   document.removeEventListener('fullscreenchange', onFullscreenChange)
+  svgEl.value?.removeEventListener('wheel', onWheel, { capture: true })
   resizeObserver?.disconnect()
   if (fitTimer) clearTimeout(fitTimer)
   destroy()

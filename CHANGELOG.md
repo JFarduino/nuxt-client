@@ -143,6 +143,12 @@
   sent as JSON strings; they are now sent as numbers when the schema type is `number` or
   `integer`.
 
+- CWL workflow graph: zooming with the wheel also scrolled the page (cwl-svg never cancels the
+  wheel event); over the graph the wheel now only zooms. Dragging a node made the canvas pan
+  non-stop once the page had been scrolled, so the node raced away: cwl-svg's edge panning
+  measures the canvas position only once, when the graph is created. It is now measured again at
+  each drag start, and edge panning moves at half its former speed.
+
 ### Documentation
 - `docs/known-issues.md`: server-side problems found while testing the UI end to end, with
   reproductions, so they can be reported to ZOO-Project.
