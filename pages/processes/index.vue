@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from '#imports'
+import { useRoute, useRouter } from '#imports'
 import { useI18n } from 'vue-i18n'
 import { QCard, QCardSection, QInput, QBtn, QDialog, QForm, QUploader, QSpinnerGears, Notify } from 'quasar'
 import HelpDialog from '../../components/help/HelpDialog.vue'
@@ -8,6 +8,8 @@ import processListHelp from '../../components/help/processListHelp.js'
 
 import AppDialog from '~/components/modal/AppDialog.vue'
 import CwlGraph from '~/components/common/CwlGraph.vue'
+import ProcessPreview from '~/components/processes/ProcessPreview.vue'
+import { cleanDescription, processDescription } from '~/composables/utils/processMetadata'
 
 import yaml from 'js-yaml'
 import { nextTick, watch } from 'vue'
@@ -141,113 +143,89 @@ const downloadCWL = () => {
   URL.revokeObjectURL(url);
 };
 
-// Preview: fetch the process description and its application package; the graph
-// itself is drawn by <CwlGraph> (cwl-svg).
-const visualizeCwl = async (row: any) => {
-  loadingCwl.value = true
+// Preview of a process, unfolded under its row: description, workflow graph of its
+// application package (<CwlGraph>), actions, inputs, outputs and provenance
+// (<ProcessPreview>). One row at a time; the open row is kept in the URL
+// (?process=<id>) so the view can be shared or restored.
+const route = useRoute()
+const expandedId = ref<string | null>(null)
+let previewRequest = 0
+
+const loadPreview = async (row: any) => {
+  const request = ++previewRequest
+  selectedProcess.value = null
   cwlText.value = null
   cwlError.value = null
+  loadingCwl.value = true
   try {
-    const metaUrl = await buildOgcApiUrl(`/processes/${row.id}`, { acceptLanguage: locale.value })
-    const metaRes = await fetch(metaUrl, {
-      headers: { Accept: 'application/json', ...getRequestHeaders(locale.value) }
-    })
-    if (metaRes.ok) selectedProcess.value = await metaRes.json()
-
-    const url = await buildOgcApiUrl(`/processes/${row.id}/package`, { acceptLanguage: locale.value })
-    const res = await fetch(url, {
-      headers: { Accept: 'application/cwl+yaml', ...getRequestHeaders(locale.value) }
-    })
-    if (!res.ok) {
-      cwlError.value =
-        res.status === 404 || res.status === 406
-          ? t('Application package is not available. It may have been removed after a service restart.')
-          : t('Failed to load application package.')
-      return
-    }
-    cwlText.value = await res.text()
-  } catch (err: any) {
-    cwlError.value = errorSummary(err, t('Unable to reach the server to retrieve the application package.'))
-  } finally {
-    loadingCwl.value = false
+    const detail = await apiFetch<any>(`/processes/${encodeURIComponent(row.id)}`, { acceptLanguage: locale.value })
+    if (request === previewRequest) selectedProcess.value = detail
+  } catch {
+    // The list entry still gives the identifier, title, description and modes.
+    if (request === previewRequest) selectedProcess.value = row
   }
-}
-
-const iconMap: Record<string, string> = {
-  softwareVersion: "apps",
-  author: "person",
-  contributor: "group",
-  organization: "business",
-  license: "description",
-  keywords: "tag",
-  address: 'place',
-  codeRepository: "cloud_upload",
-};
-
-
-const SCHEMA_INTERNAL_KEYS = ['class', '@context', '@type'];
-
-const extractMetaType = (role: string) => {
-  if (!role) return '';
-  return role.split("/").pop(); 
-}; 
-
-const isUrl = (value) => {
-  if (typeof value !== "string") return false;
-  return value.startsWith("http://") || value.startsWith("https://");
-};
-
-const openSchema = (url) => {
-  window.open(url, "_blank");
-};
-
-
-const normalizeType = (type: string) => {
-  if (!type) return null;
-
-  // Remove namespace prefix 
-  if (type.includes(':')) {
-    return type.split(':')[1];
-  }
-
-  return type;
-};
-
-const getEntityType = (value: any) => {
-  const type = value?.['@type'];
-  return type ? normalizeType(type) : null;
-};
-
-
-const getEntitySchemaUrl = (value: any) => {
-  const type = normalizeType(value?.['@type']);
-  return type ? `https://schema.org/${type}` : null;
-};
-
-const getRenderableFields = (value: any) => {
-  if (!value || typeof value !== 'object') return []
-  return Object.entries(value).filter(
-    ([key]) => !SCHEMA_INTERNAL_KEYS.includes(key)
-  )
-}
-
-const prettyAddressKey = (key: string) => {
-  if (key === 's:addressCountry' || key === 'addressCountry') return 'Country'
-  return key
-}
-
-
-const onRowClick = async (evt, row, index) => {
-  selectedProcess.value = row
-
-  //  If the process has a package do not open cwl, just open details
-  if (row.mutable === false) {
-    router.push(`/processes/${row.id}`)
+  if (!row.mutable) {
+    if (request === previewRequest) loadingCwl.value = false
     return
   }
+  try {
+    const text = await apiFetch<string>(`/processes/${encodeURIComponent(row.id)}/package`, {
+      responseType: 'text',
+      accept: 'application/cwl+yaml',
+      acceptLanguage: locale.value
+    })
+    if (request === previewRequest) cwlText.value = text
+  } catch (err: any) {
+    if (request !== previewRequest) return
+    cwlError.value =
+      err?.status === 404 || err?.status === 406
+        ? t('Application package is not available. It may have been removed after a service restart.')
+        : errorSummary(err, t('Failed to load application package.'))
+  } finally {
+    if (request === previewRequest) loadingCwl.value = false
+  }
+}
 
-  // Normal process , show CWL preview automatically
-  await visualizeCwl(row)
+const syncPreviewQuery = (id: string | null) => {
+  const query = { ...route.query }
+  if (id) query.process = id
+  else delete query.process
+  router.replace({ query })
+}
+
+const collapsePreview = () => {
+  previewRequest++
+  expandedId.value = null
+  selectedProcess.value = null
+  cwlText.value = null
+  cwlError.value = null
+  loadingCwl.value = false
+  syncPreviewQuery(null)
+}
+
+const togglePreview = async (row: any) => {
+  if (expandedId.value === row.id) {
+    collapsePreview()
+    return
+  }
+  expandedId.value = row.id
+  syncPreviewQuery(row.id)
+  nextTick(() => {
+    document.getElementById(`process-preview-${row.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  })
+  await loadPreview(row)
+}
+
+// The list has no metadata: once a row is open, its package description fills the gap.
+const rowDescription = (row: any) =>
+  cleanDescription(row.description) ||
+  (expandedId.value === row.id && selectedProcess.value ? processDescription(selectedProcess.value) : '')
+
+const openPreviewFromQuery = () => {
+  const id = String(route.query.process || '')
+  if (!id || expandedId.value === id) return
+  const row = data.value?.processes?.find((p: any) => p.id === id)
+  if (row) togglePreview(row)
 }
 
 
@@ -310,7 +288,7 @@ const deleteProcess = async (row: any) => {
       })
       if (response.ok) {
         Notify.create({ message: t('Process deleted successfully'), type: 'positive' })
-        if (selectedProcess.value?.id === row.id) selectedProcess.value = null
+        if (expandedId.value === row.id) collapsePreview()
         await fetchData()
       } else {
         const detail = await readErrorDetail(response)
@@ -484,6 +462,7 @@ const fetchData = async () => {
   listLoading.value = true
   try {
     data.value = await apiFetch('/processes', { query: { f: 'json' }, acceptLanguage: locale.value })
+    openPreviewFromQuery()
   } catch (error) {
     console.error('Error fetching data:', error)
     Notify.create({ type: 'negative', message: errorSummary(error, t('Request failed')) })
@@ -499,41 +478,15 @@ onMounted(() => {
 
 // table helpers and computed
 const columns = computed(() => [
-  { name: 'id', label: t('Identifier'), field: 'id', align: 'left', sortable: true, style: 'width: 200px' },
-  { name: 'title', label: t('Title'), field: 'title', align: 'left', sortable: true, style: 'width: 220px' },
-  { name: 'description', label: t('Description'), field: 'description', align: 'left', sortable: false, style: 'width: 100%;' },
-  { name: 'version', label: t('Version'), field: 'version', align: 'left', sortable: true, style: 'width: 90px' },
-  { name: 'kind', label: t('Kind'), field: 'mutable', align: 'left', sortable: true, style: 'width: 120px' },
-  { name: 'link', label: t('Actions'), align: 'center', style: 'width: 120px', sortable: false }
+  { name: 'expand', label: '', field: 'id', align: 'left', sortable: false, style: 'width: 52px', headerStyle: 'width: 52px' },
+  { name: 'id', label: t('Identifier'), field: 'id', align: 'left', sortable: true, style: 'width: 200px', headerStyle: 'width: 200px' },
+  { name: 'title', label: t('Title'), field: 'title', align: 'left', sortable: true, style: 'width: 200px', headerStyle: 'width: 200px' },
+  { name: 'description', label: t('Description'), field: 'description', align: 'left', sortable: false },
+  { name: 'version', label: t('Version'), field: 'version', align: 'left', sortable: true, style: 'width: 90px', headerStyle: 'width: 90px' },
+  { name: 'kind', label: t('Kind'), field: 'mutable', align: 'left', sortable: true, style: 'width: 120px', headerStyle: 'width: 120px' }
 ])
 
 const goToJobs = (row: any) => router.push({ path: '/jobs', query: { processID: row.id } })
-
-const getInputType = (input: any) => {
-  const schema =
-    input?.['original-schema'] ||   
-    input?.schema ||
-    input
-
-  // Handle allOf
-  if (schema?.allOf && Array.isArray(schema.allOf)) {
-    const refObj = schema.allOf.find((s: any) => s.$ref)
-    const formatObj = schema.allOf.find((s: any) => s.format)
-
-    if (formatObj?.format && refObj?.$ref) {
-      return {
-        label: formatObj.format,
-        link: refObj.$ref
-      }
-    }
-  }
-
-  if (schema?.type) {
-    return { label: schema.type }
-  }
-
-  return { label: 'object' }
-}
 
 const rows = computed(() => {
   if (!data.value?.processes) return []
@@ -629,75 +582,78 @@ const onClearSearch = async () => {
               bordered
               :rows-per-page-options="[10, 25, 50, 0]"
               class="processes-table rounded-borders"
-              @row-click="onRowClick"
             >
-              <template v-slot:body-cell-id="{ row }">
-                <q-td class="id-td">
-                  <NuxtLink :to="`/processes/${row.id}`" class="text-primary text-weight-bold" @click.stop>{{ row.id }}</NuxtLink>
-                  <div v-if="row.keywords?.length" class="q-mt-xs">
-                    <q-chip v-for="kw in row.keywords.slice(0, 4)" :key="kw" dense size="sm" color="grey-3" text-color="grey-9">{{ kw }}</q-chip>
-                  </div>
-                </q-td>
-              </template>
-              <template v-slot:body-cell-title="{ row }">
-                <q-td class="description-td">
-                  <div class="description-cell">{{ row.title || '—' }}</div>
-                </q-td>
-              </template>
-              <template v-slot:body-cell-description="{ row }">
-                <q-td class="description-td">
-                  <div class="description-cell">
-                    {{ row.description || '—' }}
-                  </div>
-                </q-td>
-              </template>
-              <template v-slot:body-cell-version="{ row }">
-                <q-td>{{ row.version || '—' }}</q-td>
-              </template>
-              <template v-slot:body-cell-kind="{ row }">
-                <q-td>
-                  <q-badge :color="row.mutable ? 'primary' : 'grey-7'" :label="row.mutable ? t('Deployed') : t('Built-in')" />
-                  <div class="q-mt-xs">
-                    <q-icon v-if="(row.jobControlOptions || []).includes('async-execute')" name="schedule" size="xs" class="q-mr-xs">
-                      <q-tooltip>{{ t('Asynchronous execution') }}</q-tooltip>
-                    </q-icon>
-                    <q-icon v-if="(row.jobControlOptions || []).includes('sync-execute')" name="bolt" size="xs" class="q-mr-xs">
-                      <q-tooltip>{{ t('Synchronous execution') }}</q-tooltip>
-                    </q-icon>
-                    <q-icon v-if="(row.jobControlOptions || []).includes('dismiss')" name="cancel" size="xs">
-                      <q-tooltip>{{ t('Jobs can be dismissed') }}</q-tooltip>
-                    </q-icon>
-                  </div>
-                </q-td>
-              </template>
-              <template v-slot:body-cell-link="{ row }">
-                <q-td class="text-center">
-                  <q-btn-dropdown color="primary" :label="t('Actions')" flat dense @click.stop>
-                    <q-list dense>
-                      <q-item clickable v-close-popup @click="viewProcess(row)">
-                        <q-item-section avatar><q-icon name="play_arrow" /></q-item-section>
-                        <q-item-section>{{ t('View & execute') }}</q-item-section>
-                      </q-item>
-                      <q-item clickable v-close-popup @click="goToJobs(row)">
-                        <q-item-section avatar><q-icon name="work" /></q-item-section>
-                        <q-item-section>{{ t('Jobs') }}</q-item-section>
-                      </q-item>
-                      <q-item v-if="row.mutable" clickable v-close-popup @click="packageProcess(row)">
-                        <q-item-section avatar><q-icon name="inventory_2" /></q-item-section>
-                        <q-item-section>{{ t('Package') }}</q-item-section>
-                      </q-item>
-                      <q-item v-if="row.mutable" clickable v-close-popup @click="openReplaceDialog(row)">
-                        <q-item-section avatar><q-icon name="published_with_changes" /></q-item-section>
-                        <q-item-section>{{ t('Replace') }}</q-item-section>
-                      </q-item>
-                      <q-separator v-if="row.mutable" />
-                      <q-item v-if="row.mutable" clickable v-close-popup @click="deleteProcess(row)">
-                        <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
-                        <q-item-section class="text-negative">{{ t('Delete') }}</q-item-section>
-                      </q-item>
-                    </q-list>
-                  </q-btn-dropdown>
-                </q-td>
+              <template #body="props">
+                <q-tr
+                  :props="props"
+                  class="process-row"
+                  :class="{ 'process-row--open': expandedId === props.row.id }"
+                  @click="togglePreview(props.row)"
+                >
+                  <q-td key="expand" :props="props" class="expand-td">
+                    <q-btn
+                      flat
+                      round
+                      dense
+                      size="sm"
+                      :icon="expandedId === props.row.id ? 'expand_more' : 'chevron_right'"
+                      :aria-expanded="expandedId === props.row.id ? 'true' : 'false'"
+                      :aria-controls="`process-preview-${props.row.id}`"
+                      :aria-label="expandedId === props.row.id
+                        ? t('Hide the preview of {id}', { id: props.row.id })
+                        : t('Show the preview of {id}', { id: props.row.id })"
+                      @click.stop="togglePreview(props.row)"
+                    />
+                  </q-td>
+                  <q-td key="id" :props="props" class="id-td">
+                    <NuxtLink :to="`/processes/${props.row.id}`" class="text-primary text-weight-bold" @click.stop>{{ props.row.id }}</NuxtLink>
+                    <div v-if="props.row.keywords?.length" class="q-mt-xs">
+                      <q-chip v-for="kw in props.row.keywords.slice(0, 4)" :key="kw" dense size="sm" color="grey-3" text-color="grey-9">{{ kw }}</q-chip>
+                    </div>
+                  </q-td>
+                  <q-td key="title" :props="props" class="description-td">
+                    <div class="description-cell">{{ props.row.title || '—' }}</div>
+                  </q-td>
+                  <q-td key="description" :props="props" class="description-td">
+                    <div class="description-cell">{{ rowDescription(props.row) || '—' }}</div>
+                  </q-td>
+                  <q-td key="version" :props="props">{{ props.row.version || '—' }}</q-td>
+                  <q-td key="kind" :props="props">
+                    <q-badge :color="props.row.mutable ? 'primary' : 'grey-7'" :label="props.row.mutable ? t('Deployed') : t('Built-in')" />
+                    <div class="q-mt-xs">
+                      <q-icon v-if="(props.row.jobControlOptions || []).includes('async-execute')" name="schedule" size="xs" class="q-mr-xs">
+                        <q-tooltip>{{ t('Asynchronous execution') }}</q-tooltip>
+                      </q-icon>
+                      <q-icon v-if="(props.row.jobControlOptions || []).includes('sync-execute')" name="bolt" size="xs" class="q-mr-xs">
+                        <q-tooltip>{{ t('Synchronous execution') }}</q-tooltip>
+                      </q-icon>
+                      <q-icon v-if="(props.row.jobControlOptions || []).includes('dismiss')" name="cancel" size="xs">
+                        <q-tooltip>{{ t('Jobs can be dismissed') }}</q-tooltip>
+                      </q-icon>
+                    </div>
+                  </q-td>
+                </q-tr>
+                <q-tr
+                  v-if="expandedId === props.row.id"
+                  :id="`process-preview-${props.row.id}`"
+                  :props="props"
+                  class="process-preview-row"
+                >
+                  <q-td colspan="100%" class="process-preview-td">
+                    <ProcessPreview
+                      :process="props.row"
+                      :detail="selectedProcess"
+                      :cwl-text="cwlText"
+                      :cwl-error="cwlError"
+                      :loading="loadingCwl"
+                      @execute="viewProcess(props.row)"
+                      @jobs="goToJobs(props.row)"
+                      @package="packageProcess(props.row)"
+                      @replace="openReplaceDialog(props.row)"
+                      @delete="deleteProcess(props.row)"
+                    />
+                  </q-td>
+                </q-tr>
               </template>
               <template #no-data>
                 <div class="full-width row flex-center text-grey-7 q-py-lg">
@@ -706,307 +662,6 @@ const onClearSearch = async () => {
                 </div>
               </template>
             </q-table>
-            <!-- CWL Preview Section (UNDER the table) -->
-            <div v-if="selectedProcess" class="row q-col-gutter-lg q-mt-lg">
-              <div class="col-12 col-md-8">
-                <div class="row items-center q-mb-sm">
-                  <div class="text-h6 text-weight-bold">{{ t('CWL Preview') }}</div>
-                  <q-space />
-                  <q-btn
-                    v-if="cwlText"
-                    flat
-                    dense
-                    no-caps
-                    icon="code"
-                    :label="t('Application Package')"
-                    @click="packageProcess(selectedProcess)"
-                  />
-                </div>
-                <q-banner v-if="cwlError" dense rounded class="bg-orange-1 text-orange-10">
-                  <template #avatar><q-icon name="warning" color="warning" /></template>
-                  {{ cwlError }}
-                </q-banner>
-                <q-skeleton v-else-if="loadingCwl" type="rect" height="560px" class="rounded-borders" />
-                <CwlGraph v-else-if="cwlText" :cwl="cwlText" :name="selectedProcess?.id" height="560px" />
-              </div>
-              <!-- Right: metadata -->
-              <div class="col-12 col-md-4">
-                <q-card flat bordered>
-                  <q-card-section>
-                    <p class="text-h6 text-weight-bold">{{ t('Metadata') }}</p>
-                    <q-separator class="q-my-sm" />
-
-                    <p><b>Description</b> {{ selectedProcess?.description || '—' }}</p>
-                    
-                    <div class="row q-mb-sm items-center">
-                      <div class="text-weight-bold">{{ t('Software Version') }}</div>
-                      <div class="q-ml-sm">{{ selectedProcess?.version || '—' }}</div>
-                    </div>
-
-
-                    <div class="row q-mb-sm items-center">
-                      <div class="text-weight-bold">{{ t('Keywords') }}</div>
-                      <div class="q-ml-sm">
-                        <span v-if="selectedProcess?.keywords?.length">
-                          {{ selectedProcess.keywords.join(', ') }}
-                        </span>
-                        <span v-else>—</span>
-                      </div>
-                    </div>
-
-                    <q-separator class="q-my-sm" />
-
-                    <!-- Inputs Table -->
-                    <p class="text-weight-bold q-mt-md">{{ t('Inputs') }}</p>
-
-                    <table class="custom-table">
-                      <thead>
-                        <tr>
-                          <th>{{ t('Label') }}</th>
-                          <th>{{ t('Type') }}</th>
-                          <th>{{ t('Description') }}</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        <tr v-for="([key, val]) in Object.entries(selectedProcess?.inputs || {})" :key="key">
-                          <td>{{ key }}</td>
-                          <td>
-                            <template v-if="getInputType(val).link">
-                              <a
-                                :href="getInputType(val).link"
-                                target="_blank"
-                                class="text-primary"
-                              >
-                                {{ getInputType(val).label }}
-                              </a>
-                            </template>
-
-                            <template v-else>
-                              {{ getInputType(val).label }}
-                            </template>
-                          </td>
-                          <td>{{ val?.description || '—' }}</td>
-                        </tr>
-
-                        <tr v-if="!Object.keys(selectedProcess?.inputs || {}).length">
-                          <td colspan="3" class="text-center text-grey">{{ t('No inputs') }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-
-
-                    <q-separator class="q-my-sm" />
-
-                    <!-- Outputs Table -->
-                    <p class="text-weight-bold q-mt-md">{{ t('Outputs') }}</p>
-
-                    <table class="custom-table">
-                      <thead>
-                        <tr>
-                          <th>{{ t('Label') }}</th>
-                          <th>{{ t('Type') }}</th>
-                          <th>{{ t('Description') }}</th>
-                        </tr>
-                      </thead>
-
-                      <tbody>
-                        <tr v-for="([key, val]) in Object.entries(selectedProcess?.outputs || {})" :key="key">
-                          <td>{{ key }}</td>
-                          <td>
-                            <template v-if="getInputType(val).link">
-                              <a
-                                :href="getInputType(val).link"
-                                target="_blank"
-                                class="text-primary"
-                              >
-                                {{ getInputType(val).label }}
-                              </a>
-                            </template>
-
-                            <template v-else>
-                              {{ getInputType(val).label }}
-                            </template>
-                          </td>
-                          <td>{{ val?.description || '—' }}</td>
-                        </tr>
-
-                        <tr v-if="!Object.keys(selectedProcess?.outputs || {}).length">
-                          <td colspan="3" class="text-center text-grey">{{ t('No outputs') }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-
-                <q-separator class="q-my-sm" />
-
-                <q-expansion-item
-                  expand-separator
-                  icon="info"
-                  :label="t('Additional Metadata')"
-                  dense
-                  dense-toggle
-                  class="rounded-borders bg-white q-mt-md shadow-1"
-                >
-                  <q-card-section>
-
-                    <div v-if="selectedProcess.metadata?.length">
-
-                      <div
-                        v-for="(md, i) in selectedProcess.metadata"
-                        :key="i"
-                        class="q-py-sm q-mb-sm border-bottom"
-                        style="border-bottom: 1px solid #eee;"
-                      >
-
-                    <div class="row items-center q-mb-xs">
-
-                      <!-- ICON (left side, decorative only) -->
-                      <q-icon
-                        :name="iconMap[extractMetaType(md.role)] || 'info'"
-                        size="18px"
-                        class="text-primary q-mr-sm"
-                      />
-
-                      <!-- LABEL (clickable - schema.org page) -->
-                        <div
-                          class="text-weight-bold text-primary"
-                          :class="{ 'cursor-pointer': md.role }"
-                          @click="md.role && openSchema(md.role)"
-                        >
-                        {{ md.role ? extractMetaType(md.role) : md.title }}
-                      </div>
-
-                    </div>
-                      <!--title-only metadata -->
-                      <div v-if="md.title && !md.value" class="q-mt-xs text-grey-8">
-                        {{ md.title }}
-                      </div>
-
-
-                      <!-- Simple string value -->
-                      <div v-else-if="typeof md.value === 'string'" class="q-mt-xs text-grey-8 long-text">
-                        <template v-if="isUrl(md.value)">
-                          <a :href="md.value" target="_blank" class="text-primary">
-                            {{ md.value }}
-                          </a>
-                        </template>
-                        <template v-else>
-                          {{ md.value }}
-                        </template>
-                      </div>
-
-                      <!-- Object value -->
-                      <div v-else-if="typeof md.value === 'object'" class="q-mt-xs">
-
-                        <!-- ENTITY TYPE -->
-                        <div
-                          v-if="getEntityType(md.value)"
-                          class="text-caption text-primary cursor-pointer q-mb-xs"
-                          @click="openSchema(getEntitySchemaUrl(md.value))"
-                        >
-                          {{ getEntityType(md.value) }}
-                        </div>
-
-
-
-                        <!-- ENTITY FIELDS -->
-                          <div
-                            v-for="([key, v], i) in getRenderableFields(md.value)"
-                            :key="i"
-                            class="q-mb-xs text-grey-8"
-                          >
-
-                        <template v-if="key === 'address' && typeof v === 'object'">
-                          <div class="q-mt-sm">
-                            <strong>
-                              <q-icon name="place" size="14px" class="q-mr-xs text-primary" />
-                              address:
-                            </strong>
-
-                            <div class="q-ml-lg q-mt-xs">
-                              <div
-                                v-for="([addrKey, addrVal], i) in getRenderableFields(v)"
-                                :key="i"
-                                class="q-mb-xs"
-                              >
-                                <strong>{{ prettyAddressKey(addrKey) }}:</strong>
-                                <span class="q-ml-xs">{{ addrVal }}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </template>
-
-                          
-                        <template v-else>
-                          <strong class="q-mr-xs">{{ key }}:</strong>
-
-                          <!--  If nested object -->
-                          <template v-if="typeof v === 'object'">
-                            <div class="q-ml-md q-mt-xs">
-
-                              <div
-                                v-if="getEntityType(v)"
-                                class="text-caption text-primary cursor-pointer q-mb-xs"
-                                @click="openSchema(getEntitySchemaUrl(v))"
-                              >
-                                {{ getEntityType(v) }}
-                              </div>
-
-                              <div
-                                v-for="([nestedKey, nestedVal], j) in getRenderableFields(v)"
-                                :key="j"
-                                class="q-mb-xs"
-                              >
-                                <strong>{{ normalizeType(nestedKey) }}:</strong>
-
-                                <span class="q-ml-xs">
-                                  <template v-if="isUrl(nestedVal)">
-                                    <a :href="nestedVal" target="_blank" class="text-primary">
-                                      {{ nestedVal }}
-                                    </a>
-                                  </template>
-                                  <template v-else>
-                                    {{ nestedVal }}
-                                  </template>
-                                </span>
-
-                              </div>
-                            </div>
-                          </template>
-
-                          <!-- If string -->
-                          <template v-else>
-                            <span class="long-text">
-                              <template v-if="isUrl(v)">
-                                <a :href="v" target="_blank" class="text-primary">
-                                  {{ v }}
-                                </a>
-                              </template>
-                              <template v-else>
-                                {{ v }}
-                              </template>
-                            </span>
-                          </template>
-                        </template>
-                        </div>
-
-                      </div>
-
-                      </div>
-
-                    </div>
-
-                    <div v-else class="text-grey-6">
-                      —
-                    </div>
-
-                  </q-card-section>
-                </q-expansion-item>
-
-                  </q-card-section>
-                </q-card>
-              </div>
-            </div>
 
 
       </div>
@@ -1148,33 +803,6 @@ const onClearSearch = async () => {
   </q-page>
 </template>
 <style>
-.custom-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 8px;
-  background: var(--surface-bg, #fff);
-  border-radius: 4px;
-  overflow: hidden;
-  font-size: 14px;
-}
-
-.custom-table th {
-  background: var(--surface-alt, #f2f2f2);
-  padding: 8px;
-  text-align: left;
-  border-bottom: 1px solid #ddd;
-  font-weight: bold;
-}
-
-.custom-table td {
-  padding: 8px;
-  border-bottom: 1px solid #eee;
-}
-
-.custom-table tr:last-child td {
-  border-bottom: none;
-}
-
 .long-text {
   word-break: break-all;
   overflow-wrap: anywhere;
@@ -1198,7 +826,29 @@ const onClearSearch = async () => {
   vertical-align: top;
 }
 
-.processes-table :deep(tbody tr) {
+.processes-table tbody tr.process-row {
   cursor: pointer;
+}
+
+.processes-table .expand-td {
+  width: 52px;
+}
+
+.processes-table tr.process-row--open > td {
+  background: rgba(242, 192, 55, 0.09);
+  border-bottom-color: transparent;
+}
+
+.processes-table tr.process-preview-row > td {
+  padding: 4px 16px 16px;
+  background: rgba(242, 192, 55, 0.04);
+  white-space: normal;
+}
+
+/* On narrow screens the table scrolls sideways: keep the preview within the visible width. */
+.processes-table tr.process-preview-row > td > .process-preview {
+  position: sticky;
+  left: 16px;
+  max-width: min(100%, calc(100vw - 80px));
 }
 </style>

@@ -34,6 +34,18 @@
   It replaces the hand-made scripts of `public/cwl-demo` under the processes list, and the deploy
   dialog now draws the package being deployed while it is typed or after a file is picked.
 
+- Processes list: a click on a row unfolds the process preview right under it instead of at
+  the bottom of the page (built-in processes used to open their page). The preview holds the
+  workflow graph of the package, the actions (Execute, Jobs, CWL package, and Replace / Delete
+  in a menu, which replace the Actions column), the description, execution modes, keywords,
+  inputs (type, required or optional) and outputs, and the provenance of the package on one
+  line with its details on demand. One row is open at a time and the address keeps it
+  (`?process=<id>`). The schema.org metadata is grouped (an organisation named as producer and
+  source organisation is listed once); the description falls back to the one of the package
+  when the server sends none or its message catalogue header, and the `None` titles the server
+  writes for untitled inputs are hidden. New `components/processes/ProcessPreview.vue` and
+  `composables/utils/processMetadata.ts` (unit tested).
+
 ### Security
 - Dependencies: `npm audit` went from 80 findings (11 critical, 36 high) to 8 moderate ones that
   only Nuxt 4 fixes. Non-breaking updates applied with `npm audit fix` (quasar, vite, rollup,
