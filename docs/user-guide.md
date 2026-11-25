@@ -63,13 +63,22 @@ view can be shared or restored. The preview holds:
   **Delete** (undeploy, `DELETE /processes/{id}`; the server answers *ImmutableProcess* when
   the package copy is missing and the message is shown as is).
 - **The description, version, execution modes and keywords**, then the **inputs** (type,
-  required or optional, description) and the **outputs**. When the server sends no
-  description, the one of the application package is shown.
+  required or optional, number of values accepted, default value, media types, description)
+  and the **outputs**. When the server sends no description, the one of the application
+  package is shown.
 - **The provenance** of the application package on one line (authors, organisations,
-  publication date and registry); **Details** unfolds the full list: author with a link to
-  write to them, organisations (listed once even when the package names them as producer and
-  source organisation), identifier with a copy button, creation and publication dates, and
-  the other metadata entries.
+  publication date and registry). **All metadata** unfolds everything the server gives about
+  the process: its fields (identifier with a copy button, title, description, version,
+  keywords, kind, execution modes, output transmission, links), each schema.org metadata
+  entry of the package with all its fields (organisations, addresses, persons with a link to
+  write to them, dates in UTC, links to the schema.org terms), and the full JSON document.
+
+When the full description cannot be loaded, a banner says so and the preview shows the list
+entry. The package of a process deployed without an account is refused by the server (`406`,
+see [known issues](known-issues.md)); the preview says so instead of the graph. A search,
+sorting or a page change that hides the open row folds it, and opening an address with
+`?process=<id>` goes to the page of the table that holds that process. A process listed twice
+by the server appears once.
 
 The identifier link of a row still opens the process page directly.
 

@@ -221,3 +221,20 @@ curl -s -H 'Accept: application/json' -H 'Accept-Language: fr-FR' \
   http://localhost:8080/ogc-api/processes/helloworld_pipeline | jq -r .description | head -1
 # Project-Id-Version: ZOO-Kernel Internationalization
 ```
+
+## Added on 2026-11-25
+
+### A process listed twice in a user's process list (minor)
+
+`GET /<user>/ogc-api/processes` can list the same process twice, as two identical entries
+(same identifier, same `href`): on 2026-11-25 the list of a local test user held
+`helloworld_pipeline` twice, while the anonymous list held it once. With the
+identifier as row key the processes table showed two rows, and unfolding one unfolded the other
+too. The UI now keeps the first entry of each identifier; the cause on the server side (how the
+user's processes and the shared ones are merged) is not identified yet.
+
+```bash
+curl -s -H 'Accept: application/json' 'http://localhost:8080/<user>/ogc-api/processes?limit=100' \
+  | jq -r '.processes[].id' | sort | uniq -d
+# helloworld_pipeline
+```

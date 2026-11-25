@@ -9,7 +9,7 @@ import processListHelp from '../../components/help/processListHelp.js'
 import AppDialog from '~/components/modal/AppDialog.vue'
 import CwlGraph from '~/components/common/CwlGraph.vue'
 import ProcessPreview from '~/components/processes/ProcessPreview.vue'
-import { cleanDescription, processDescription } from '~/composables/utils/processMetadata'
+import { cleanDescription, processDescription, uniqueProcesses } from '~/composables/utils/processMetadata'
 
 import yaml from 'js-yaml'
 import { nextTick, watch } from 'vue'
@@ -144,28 +144,37 @@ const downloadCWL = () => {
 };
 
 // Preview of a process, unfolded under its row: description, workflow graph of its
-// application package (<CwlGraph>), actions, inputs, outputs and provenance
+// application package (<CwlGraph>), actions, inputs, outputs and all its metadata
 // (<ProcessPreview>). One row at a time; the open row is kept in the URL
-// (?process=<id>) so the view can be shared or restored.
+// (?process=<id>) so the view can be shared or restored. A row that leaves the
+// visible page (search, sorting, pagination, refresh) is closed.
 const route = useRoute()
+const tableRef = ref<any>(null)
+const pagination = ref({ sortBy: null as string | null, descending: false, page: 1, rowsPerPage: 10 })
 const expandedId = ref<string | null>(null)
+const detailError = ref<string | null>(null)
 let previewRequest = 0
 
 const loadPreview = async (row: any) => {
   const request = ++previewRequest
+  const current = () => request === previewRequest
   selectedProcess.value = null
+  detailError.value = null
   cwlText.value = null
   cwlError.value = null
   loadingCwl.value = true
   try {
     const detail = await apiFetch<any>(`/processes/${encodeURIComponent(row.id)}`, { acceptLanguage: locale.value })
-    if (request === previewRequest) selectedProcess.value = detail
-  } catch {
+    if (!current()) return
+    selectedProcess.value = detail
+  } catch (err) {
+    if (!current()) return
     // The list entry still gives the identifier, title, description and modes.
-    if (request === previewRequest) selectedProcess.value = row
+    selectedProcess.value = row
+    detailError.value = errorSummary(err, t('The full description of the process could not be loaded: only the list entry is shown.'))
   }
   if (!row.mutable) {
-    if (request === previewRequest) loadingCwl.value = false
+    loadingCwl.value = false
     return
   }
   try {
@@ -174,19 +183,23 @@ const loadPreview = async (row: any) => {
       accept: 'application/cwl+yaml',
       acceptLanguage: locale.value
     })
-    if (request === previewRequest) cwlText.value = text
+    if (current()) cwlText.value = text
   } catch (err: any) {
-    if (request !== previewRequest) return
-    cwlError.value =
-      err?.status === 404 || err?.status === 406
-        ? t('Application package is not available. It may have been removed after a service restart.')
-        : errorSummary(err, t('Failed to load application package.'))
+    if (!current()) return
+    if (err?.status === 406) {
+      cwlError.value = t('The server does not provide the application package of this process (processes deployed without an account, known server issue).')
+    } else if (err?.status === 404) {
+      cwlError.value = t('Application package is not available. It may have been removed after a service restart.')
+    } else {
+      cwlError.value = errorSummary(err, t('Failed to load application package.'))
+    }
   } finally {
-    if (request === previewRequest) loadingCwl.value = false
+    if (current()) loadingCwl.value = false
   }
 }
 
 const syncPreviewQuery = (id: string | null) => {
+  if ((route.query.process || null) === id) return
   const query = { ...route.query }
   if (id) query.process = id
   else delete query.process
@@ -197,23 +210,31 @@ const collapsePreview = () => {
   previewRequest++
   expandedId.value = null
   selectedProcess.value = null
+  detailError.value = null
   cwlText.value = null
   cwlError.value = null
   loadingCwl.value = false
   syncPreviewQuery(null)
 }
 
-const togglePreview = async (row: any) => {
-  if (expandedId.value === row.id) {
-    collapsePreview()
-    return
-  }
+const openPreview = (row: any) => {
   expandedId.value = row.id
   syncPreviewQuery(row.id)
   nextTick(() => {
     document.getElementById(`process-preview-${row.id}`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   })
-  await loadPreview(row)
+  loadPreview(row)
+}
+
+const togglePreview = (row: any) => {
+  if (expandedId.value === row.id) collapsePreview()
+  else openPreview(row)
+}
+
+// A click on the row toggles it, unless the user was selecting text.
+const onRowClick = (row: any) => {
+  if (window.getSelection()?.toString()) return
+  togglePreview(row)
 }
 
 // The list has no metadata: once a row is open, its package description fills the gap.
@@ -221,15 +242,27 @@ const rowDescription = (row: any) =>
   cleanDescription(row.description) ||
   (expandedId.value === row.id && selectedProcess.value ? processDescription(selectedProcess.value) : '')
 
-const openPreviewFromQuery = () => {
+// Open the row named in ?process=, on its page of the table.
+const openPreviewFromQuery = async () => {
   const id = String(route.query.process || '')
   if (!id || expandedId.value === id) return
-  const row = data.value?.processes?.find((p: any) => p.id === id)
-  if (row) togglePreview(row)
+  await nextTick()
+  const ordered: any[] = tableRef.value?.filteredSortedRows || rows.value
+  const index = ordered.findIndex((p: any) => p.id === id)
+  if (index < 0) {
+    syncPreviewQuery(expandedId.value)
+    return
+  }
+  const perPage = pagination.value.rowsPerPage
+  if (perPage > 0) pagination.value = { ...pagination.value, page: Math.floor(index / perPage) + 1 }
+  openPreview(ordered[index])
 }
 
-
-
+// Back/forward or a link to /processes?process=<id> while the page is open.
+watch(() => route.query.process, (id) => {
+  if (id && id !== expandedId.value) openPreviewFromQuery()
+  else if (!id && expandedId.value) collapsePreview()
+})
 
 // conformance check 
 const isConformToCwl = ref(false)
@@ -462,7 +495,7 @@ const fetchData = async () => {
   listLoading.value = true
   try {
     data.value = await apiFetch('/processes', { query: { f: 'json' }, acceptLanguage: locale.value })
-    openPreviewFromQuery()
+    await openPreviewFromQuery()
   } catch (error) {
     console.error('Error fetching data:', error)
     Notify.create({ type: 'negative', message: errorSummary(error, t('Request failed')) })
@@ -482,16 +515,17 @@ const columns = computed(() => [
   { name: 'id', label: t('Identifier'), field: 'id', align: 'left', sortable: true, style: 'width: 200px', headerStyle: 'width: 200px' },
   { name: 'title', label: t('Title'), field: 'title', align: 'left', sortable: true, style: 'width: 200px', headerStyle: 'width: 200px' },
   { name: 'description', label: t('Description'), field: 'description', align: 'left', sortable: false },
-  { name: 'version', label: t('Version'), field: 'version', align: 'left', sortable: true, style: 'width: 90px', headerStyle: 'width: 90px' },
+  { name: 'version', label: t('Version'), field: 'version', align: 'left', sortable: true, style: 'width: 110px', headerStyle: 'width: 110px' },
   { name: 'kind', label: t('Kind'), field: 'mutable', align: 'left', sortable: true, style: 'width: 120px', headerStyle: 'width: 120px' }
 ])
 
 const goToJobs = (row: any) => router.push({ path: '/jobs', query: { processID: row.id } })
 
+// The server can list a process twice (once per namespace it looks in): one row per identifier.
 const rows = computed(() => {
   if (!data.value?.processes) return []
   const term = filter.value.toLowerCase()
-  return data.value.processes.filter((p: any) => {
+  return uniqueProcesses<any>(data.value.processes).filter((p: any) => {
     if (!term) return true
     const haystack = [p.id, p.title, p.description, ...(p.keywords || [])]
       .filter(Boolean)
@@ -501,6 +535,26 @@ const rows = computed(() => {
   })
 })
 
+
+// Close the preview when its row is no longer on the visible page.
+watch(
+  () => tableRef.value?.computedRows as any[] | undefined,
+  (visible) => {
+    if (expandedId.value && visible && !visible.some((p: any) => p.id === expandedId.value)) collapsePreview()
+  }
+)
+
+// A new search starts on the first page.
+watch(filter, () => {
+  pagination.value = { ...pagination.value, page: 1 }
+})
+
+// Titles, descriptions and error messages come translated from the server.
+watch(locale, async () => {
+  const open = rows.value.find((p: any) => p.id === expandedId.value)
+  await fetchData()
+  if (open) loadPreview(rows.value.find((p: any) => p.id === open.id) || open)
+})
 
 const formattedData = computed(() => JSON.stringify(data.value, null, 2))
 
@@ -570,6 +624,8 @@ const onClearSearch = async () => {
 
 
             <q-table
+              ref="tableRef"
+              v-model:pagination="pagination"
               :title="t('Processes List')"
               :rows="rows"
               :columns="columns"
@@ -588,7 +644,7 @@ const onClearSearch = async () => {
                   :props="props"
                   class="process-row"
                   :class="{ 'process-row--open': expandedId === props.row.id }"
-                  @click="togglePreview(props.row)"
+                  @click="onRowClick(props.row)"
                 >
                   <q-td key="expand" :props="props" class="expand-td">
                     <q-btn
@@ -612,10 +668,10 @@ const onClearSearch = async () => {
                     </div>
                   </q-td>
                   <q-td key="title" :props="props" class="description-td">
-                    <div class="description-cell">{{ props.row.title || '—' }}</div>
+                    <div class="description-cell">{{ cleanDescription(props.row.title) || '—' }}</div>
                   </q-td>
                   <q-td key="description" :props="props" class="description-td">
-                    <div class="description-cell">{{ rowDescription(props.row) || '—' }}</div>
+                    <div class="description-cell description-cell--clamp" :title="rowDescription(props.row)">{{ rowDescription(props.row) || '—' }}</div>
                   </q-td>
                   <q-td key="version" :props="props">{{ props.row.version || '—' }}</q-td>
                   <q-td key="kind" :props="props">
@@ -643,6 +699,7 @@ const onClearSearch = async () => {
                     <ProcessPreview
                       :process="props.row"
                       :detail="selectedProcess"
+                      :detail-error="detailError"
                       :cwl-text="cwlText"
                       :cwl-error="cwlError"
                       :loading="loadingCwl"
@@ -813,6 +870,14 @@ const onClearSearch = async () => {
   word-break: break-word;
   overflow-wrap: anywhere;
   line-height: 1.5;
+}
+/* Long descriptions stay on four lines in the list; the preview shows them in full. */
+.description-cell--clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .dialog-pre {

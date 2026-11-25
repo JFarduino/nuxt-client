@@ -1,5 +1,10 @@
 <template>
   <div class="process-preview">
+    <q-banner v-if="detailError" dense rounded class="process-preview__notice">
+      <template #avatar><q-icon name="warning" color="warning" /></template>
+      {{ detailError }}
+    </q-banner>
+
     <div class="row q-col-gutter-lg">
       <div v-if="hasPackage" class="col-12 col-md-7">
         <q-banner v-if="cwlError" dense rounded class="process-preview__notice">
@@ -7,7 +12,7 @@
           {{ cwlError }}
         </q-banner>
         <q-skeleton v-else-if="!cwlText" type="rect" height="300px" class="rounded-borders" />
-        <CwlGraph v-else :cwl="cwlText" :name="process.id" height="300px" />
+        <CwlGraph v-else :key="process.id" :cwl="cwlText" :name="process.id" height="300px" />
       </div>
 
       <div :class="hasPackage ? 'col-12 col-md-5' : 'col-12'">
@@ -17,14 +22,7 @@
           <div class="process-preview__actions">
             <q-btn unelevated no-caps color="primary" icon="play_arrow" :label="t('Execute')" @click="emit('execute')" />
             <q-btn outline no-caps color="primary" :label="t('Jobs')" @click="emit('jobs')" />
-            <q-btn
-              v-if="process.mutable"
-              outline
-              no-caps
-              color="primary"
-              :label="t('CWL package')"
-              @click="emit('package')"
-            />
+            <q-btn v-if="process.mutable" outline no-caps color="primary" :label="t('CWL package')" @click="emit('package')" />
             <q-btn v-if="process.mutable" flat round dense icon="more_vert" :aria-label="t('More actions')">
               <q-tooltip>{{ t('More actions') }}</q-tooltip>
               <q-menu anchor="bottom right" self="top right">
@@ -44,15 +42,7 @@
           </div>
 
           <div v-if="chips.length" class="process-preview__chips">
-            <q-chip
-              v-for="chip in chips"
-              :key="chip.label"
-              dense
-              square
-              :outline="chip.outline"
-              :icon="chip.icon"
-              class="q-ml-none"
-            >
+            <q-chip v-for="chip in chips" :key="chip.label" dense square :outline="chip.outline" :icon="chip.icon" class="q-ml-none">
               {{ chip.label }}
             </q-chip>
           </div>
@@ -80,8 +70,15 @@
                     <span v-else class="process-preview__type">{{ item.type.label }}</span>
                     <span v-if="item.required === true" class="process-preview__badge process-preview__badge--required">{{ t('required') }}</span>
                     <span v-else-if="item.required === false" class="process-preview__badge">{{ t('optional') }}</span>
+                    <span v-if="item.multiple" class="process-preview__badge">
+                      {{ item.multiple === 'unbounded' ? t('multiple values') : t('up to {n} values', { n: item.multiple }) }}
+                    </span>
                   </div>
                   <div v-if="item.description" class="process-preview__item-desc">{{ item.description }}</div>
+                  <div v-if="item.defaultValue || item.formats.length" class="process-preview__item-extra">
+                    <span v-if="item.defaultValue">{{ t('default: {value}', { value: item.defaultValue }) }}</span>
+                    <span v-if="item.formats.length">{{ item.formats.join(', ') }}</span>
+                  </div>
                 </li>
               </ul>
             </section>
@@ -90,9 +87,9 @@
       </div>
     </div>
 
-    <div v-if="showProvenance" class="process-preview__provenance">
+    <div class="process-preview__footer">
       <div class="process-preview__summary">
-        <span class="process-preview__label">{{ t('Provenance') }}</span>
+        <span class="process-preview__label">{{ summaryParts.length ? t('Provenance') : t('Metadata') }}</span>
         <span v-for="(part, index) in summaryParts" :key="index" class="process-preview__part">{{ part }}</span>
         <q-space />
         <q-btn
@@ -101,67 +98,71 @@
           no-caps
           color="primary"
           :icon-right="detailsOpen ? 'expand_less' : 'expand_more'"
-          :label="detailsOpen ? t('Hide details') : t('Details')"
+          :label="detailsOpen ? t('Hide metadata') : t('All metadata')"
           :aria-expanded="detailsOpen ? 'true' : 'false'"
+          :disable="loading && !detail"
           @click="detailsOpen = !detailsOpen"
         />
       </div>
-      <q-slide-transition>
-        <dl v-show="detailsOpen" class="process-preview__dl">
-          <template v-if="provenance.authors.length">
-            <dt>{{ provenance.authors.length > 1 ? t('Authors') : t('Author') }}</dt>
-            <dd>
-              <span v-for="person in provenance.authors" :key="person.name + (person.email || '')" class="process-preview__person">
-                {{ person.name }}
-                <a
-                  v-if="person.email"
-                  :href="`mailto:${person.email}`"
-                  :aria-label="t('Write to {name}', { name: person.name })"
-                  class="process-preview__icon-link text-primary"
-                ><q-icon name="mail_outline" size="16px" /></a>
-              </span>
-            </dd>
-          </template>
-          <template v-if="provenance.organizations.length">
-            <dt>{{ t('Organization') }}</dt>
-            <dd>
-              <div v-for="org in provenance.organizations" :key="org.name + (org.url || '')">
-                <span>{{ org.name }}<template v-if="org.country"> · {{ org.country }}</template></span>
-                <a v-if="org.url" :href="org.url" target="_blank" rel="noopener" class="q-ml-sm text-primary">{{ hostOf(org.url) }}</a>
-                <div class="process-preview__muted">{{ rolesLabel(org.roles) }}</div>
-              </div>
-            </dd>
-          </template>
-          <template v-if="provenance.identifier">
+
+      <div v-if="detailsOpen" class="process-preview__details">
+        <section :aria-label="t('Process')" class="process-preview__details-section">
+          <h4 class="process-preview__heading">{{ t('Process') }}</h4>
+          <dl class="process-preview__dl">
             <dt>{{ t('Identifier') }}</dt>
             <dd class="process-preview__identifier">
-              <code>{{ provenance.identifier }}</code>
-              <CopyButton :text="provenance.identifier" :label="t('Copy the identifier')" size="sm" />
+              <code>{{ source.id }}</code>
+              <CopyButton :text="String(source.id || '')" :label="t('Copy the identifier')" size="sm" />
             </dd>
-          </template>
-          <template v-if="provenance.dateCreated">
-            <dt>{{ t('Created on') }}</dt>
-            <dd>{{ formatDate(provenance.dateCreated, locale) }}</dd>
-          </template>
-          <template v-if="provenance.datePublished || provenance.publisher">
-            <dt>{{ t('Published') }}</dt>
-            <dd>
-              <span v-if="provenance.datePublished">{{ formatDate(provenance.datePublished, locale) }}</span>
-              <template v-if="provenance.publisher">
-                <span>{{ provenance.datePublished ? ', ' : '' }}{{ t('by {publisher}', { publisher: provenance.publisher.name }) }}</span>
-                <a v-if="provenance.publisher.url" :href="provenance.publisher.url" target="_blank" rel="noopener" class="q-ml-sm text-primary">{{ hostOf(provenance.publisher.url) }}</a>
-              </template>
-            </dd>
-          </template>
-          <template v-for="entry in provenance.others" :key="entry.label + entry.value">
-            <dt>{{ entry.label }}</dt>
-            <dd>
-              <a v-if="entry.href" :href="entry.href" target="_blank" rel="noopener" class="text-primary">{{ entry.value || entry.href }}</a>
-              <span v-else>{{ entry.value }}</span>
-            </dd>
-          </template>
-        </dl>
-      </q-slide-transition>
+            <dt>{{ t('Title') }}</dt>
+            <dd>{{ cleanDescription(source.title) || '—' }}</dd>
+            <dt>{{ t('Description') }}</dt>
+            <dd class="process-preview__pre">{{ description || '—' }}</dd>
+            <dt>{{ t('Version') }}</dt>
+            <dd>{{ source.version || '—' }}</dd>
+            <dt>{{ t('Keywords') }}</dt>
+            <dd>{{ (source.keywords || []).join(', ') || '—' }}</dd>
+            <dt>{{ t('Kind') }}</dt>
+            <dd>{{ source.mutable ? t('Deployed') : t('Built-in') }}</dd>
+            <dt>{{ t('Execution modes') }}</dt>
+            <dd><code>{{ (source.jobControlOptions || []).join(', ') || '—' }}</code></dd>
+            <dt>{{ t('Output transmission') }}</dt>
+            <dd><code>{{ (source.outputTransmission || []).join(', ') || '—' }}</code></dd>
+            <template v-if="(source.links || []).length">
+              <dt>{{ t('Links') }}</dt>
+              <dd>
+                <div v-for="(link, index) in source.links" :key="index" class="process-preview__link">
+                  <span class="process-preview__muted">{{ termOf(link.rel || '') }}</span>
+                  <a :href="link.href" target="_blank" rel="noopener" class="text-primary">{{ link.title || link.href }}</a>
+                  <span v-if="link.type" class="process-preview__muted">{{ link.type }}</span>
+                </div>
+              </dd>
+            </template>
+          </dl>
+        </section>
+
+        <section :aria-label="t('schema.org metadata')" class="process-preview__details-section">
+          <h4 class="process-preview__heading">{{ t('schema.org metadata') }} · {{ metadataEntries.length }}</h4>
+          <p v-if="!metadataEntries.length" class="process-preview__empty">{{ t('No metadata') }}</p>
+          <dl v-else class="process-preview__dl">
+            <template v-for="(entry, index) in metadataEntries" :key="index">
+              <dt>
+                <a v-if="entry.roleUrl" :href="entry.roleUrl" target="_blank" rel="noopener" class="text-primary">{{ entry.label }}</a>
+                <span v-else>{{ entry.label }}</span>
+              </dt>
+              <dd>
+                <div v-if="entry.caption" class="process-preview__muted">{{ entry.caption }}</div>
+                <MetadataValue v-if="entry.hasValue" :value="entry.value" :field="entry.label" />
+                <a v-if="entry.href" :href="entry.href" target="_blank" rel="noopener" class="text-primary process-preview__break">{{ entry.href }}</a>
+              </dd>
+            </template>
+          </dl>
+        </section>
+
+        <q-expansion-item dense dense-toggle icon="data_object" :label="t('Full JSON document')" class="process-preview__json">
+          <JsonBlock :value="source" max-height="420px" />
+        </q-expansion-item>
+      </div>
     </div>
   </div>
 </template>
@@ -171,22 +172,29 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import CwlGraph from '~/components/common/CwlGraph.vue'
 import CopyButton from '~/components/common/CopyButton.vue'
+import JsonBlock from '~/components/common/JsonBlock.vue'
+import MetadataValue from '~/components/processes/MetadataValue.vue'
 import {
+  cleanDescription,
   formatDate,
-  hasProvenance,
   ioEntries,
+  metadataRole,
   processDescription,
-  summarizeProvenance
+  summarizeProvenance,
+  termOf
 } from '~/composables/utils/processMetadata'
 
 /**
  * Preview of a process unfolded under its row in the processes list: workflow
- * graph of its application package, actions, inputs and outputs, and the
- * provenance of the package summarised on one line with its details on demand.
+ * graph of its application package, actions, inputs and outputs, provenance on
+ * one line, and on demand every piece of information the server gives: the
+ * process fields, each schema.org metadata entry with all its fields, and the
+ * full JSON document.
  */
 const props = defineProps<{
   process: Record<string, any>
   detail?: Record<string, any> | null
+  detailError?: string | null
   cwlText?: string | null
   cwlError?: string | null
   loading?: boolean
@@ -207,7 +215,6 @@ const source = computed<Record<string, any>>(() => props.detail || props.process
 const hasPackage = computed(() => Boolean(props.process?.mutable))
 const description = computed(() => processDescription(source.value))
 const provenance = computed(() => summarizeProvenance(source.value?.metadata))
-const showProvenance = computed(() => hasProvenance(provenance.value))
 
 const detailsOpen = ref(false)
 watch(() => props.process?.id, () => {
@@ -222,7 +229,7 @@ const chips = computed(() => {
   if (modes.includes('sync-execute')) list.push({ label: t('Synchronous'), icon: 'bolt' })
   if (modes.includes('async-execute')) list.push({ label: t('Asynchronous'), icon: 'schedule' })
   if (modes.includes('dismiss')) list.push({ label: t('Dismissible'), icon: 'cancel' })
-  for (const keyword of (s.keywords || []).slice(0, 6)) list.push({ label: `#${keyword}`, outline: true })
+  for (const keyword of s.keywords || []) list.push({ label: `#${keyword}`, outline: true })
   return list
 })
 
@@ -230,16 +237,6 @@ const ioGroups = computed(() => [
   { kind: 'input', title: t('Inputs'), empty: t('No inputs'), items: ioEntries(source.value.inputs, 'input') },
   { kind: 'output', title: t('Outputs'), empty: t('No outputs'), items: ioEntries(source.value.outputs, 'output') }
 ])
-
-const ROLE_LABELS: Record<string, string> = {
-  producer: 'producer',
-  sourceOrganization: 'source organization',
-  provider: 'provider',
-  publisher: 'publisher',
-  funder: 'funder',
-  copyrightHolder: 'copyright holder'
-}
-const rolesLabel = (roles: string[]) => roles.map((role) => t(ROLE_LABELS[role] || role)).join(', ')
 
 const summaryParts = computed(() => {
   const p = provenance.value
@@ -253,13 +250,22 @@ const summaryParts = computed(() => {
   return parts
 })
 
-const hostOf = (url: string) => {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
-  }
-}
+// Every metadata entry as the server sends it, in its order.
+const metadataEntries = computed(() =>
+  (Array.isArray(source.value.metadata) ? source.value.metadata : []).map((entry: any) => {
+    const role = typeof entry?.role === 'string' ? entry.role : ''
+    const label = metadataRole(entry) || cleanDescription(entry?.title) || t('Metadata')
+    const hasValue = entry?.value !== undefined && entry?.value !== null
+    return {
+      label,
+      roleUrl: /^https?:\/\//i.test(role) ? role : '',
+      caption: role && entry?.title ? String(entry.title) : '',
+      hasValue,
+      value: entry?.value,
+      href: typeof entry?.href === 'string' ? entry.href : ''
+    }
+  })
+)
 </script>
 
 <style scoped>
@@ -371,6 +377,14 @@ const hostOf = (url: string) => {
   opacity: 0.85;
   overflow-wrap: anywhere;
 }
+.process-preview__item-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12px;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
 .process-preview__empty {
   margin: 0;
   font-size: 13px;
@@ -379,7 +393,7 @@ const hostOf = (url: string) => {
 .process-preview__notice {
   background: var(--surface-alt, #f2f2f2);
 }
-.process-preview__provenance {
+.process-preview__footer {
   padding: 4px 12px;
   border-radius: 8px;
   background: var(--surface-alt, #f2f2f2);
@@ -397,45 +411,60 @@ const hostOf = (url: string) => {
   text-transform: uppercase;
   opacity: 0.7;
 }
+.process-preview__details {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 10px 0 8px;
+}
+.process-preview__details-section {
+  min-width: 0;
+}
 .process-preview__dl {
   display: grid;
-  grid-template-columns: minmax(0, 140px) minmax(0, 1fr);
-  gap: 10px 16px;
-  margin: 8px 0 10px;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
   font-size: 14px;
 }
-.process-preview__dl dt {
-  opacity: 0.7;
+.process-preview__dl > dt {
+  opacity: 0.75;
+  overflow-wrap: anywhere;
 }
-.process-preview__dl dd {
+.process-preview__dl > dd {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.process-preview__person + .process-preview__person::before {
-  content: ', ';
-}
-.process-preview__icon-link {
-  display: inline-flex;
-  vertical-align: middle;
-  margin-left: 4px;
-  color: inherit;
+.process-preview__pre {
+  white-space: pre-line;
 }
 .process-preview__identifier {
   display: flex;
   align-items: flex-start;
   gap: 4px;
 }
+.process-preview__link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
 .process-preview__muted {
   font-size: 12px;
   opacity: 0.7;
+}
+.process-preview__break {
+  overflow-wrap: anywhere;
+}
+.process-preview__json {
+  border-radius: 6px;
 }
 @media (max-width: 599px) {
   .process-preview__dl {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px 0;
   }
-  .process-preview__dl dd {
+  .process-preview__dl > dd {
     margin-bottom: 8px;
   }
 }

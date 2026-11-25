@@ -19,7 +19,19 @@ export type Provenance = {
   others: MetadataEntry[]
 }
 export type IoType = { label: string; link?: string }
-export type IoEntry = { id: string; title?: string; description: string; required?: boolean; type: IoType }
+export type IoEntry = {
+  id: string
+  title?: string
+  description: string
+  required?: boolean
+  /** `unbounded` or the maximum number of values when more than one is accepted */
+  multiple?: string
+  /** default value, as displayed */
+  defaultValue?: string
+  /** media types accepted or produced (contentMediaType) */
+  formats: string[]
+  type: IoType
+}
 
 // ZOO-Project translates the process description with gettext; an empty one
 // comes back as the header of its message catalogue ("Project-Id-Version: ...").
@@ -166,6 +178,23 @@ export function hasProvenance(provenance: Provenance): boolean {
   )
 }
 
+/** Date and time of an ISO timestamp in UTC (24/11/2025 23:07 UTC), or the text itself. */
+export function formatDateTime(value: string | undefined, locale = 'en'): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const tag = locale === 'fr' ? 'fr-FR' : locale === 'en' ? 'en-GB' : locale
+  const day = date.toLocaleDateString(tag, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+  const time = date.toLocaleTimeString(tag, { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' })
+  return `${day} ${time} UTC`
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/
+/** True for an ISO 8601 date or timestamp. */
+export function isIsoDate(value: unknown): boolean {
+  return typeof value === 'string' && ISO_DATE.test(value.trim())
+}
+
 /** Date of an ISO timestamp in the reader's locale (24/11/2025 in French), or the text itself. */
 export function formatDate(value: string | undefined, locale = 'en'): string {
   if (!value) return ''
@@ -189,18 +218,70 @@ export function ioType(definition: any): IoType {
     const types = [...new Set(schema.oneOf.map((s: any) => s?.format || s?.type).filter(Boolean))]
     if (types.length) return { label: types.join(' | ') }
   }
+  if (schema?.type === 'array') {
+    const item = ioType({ schema: schema.items || {} })
+    return { label: `${item.label}[]`, ...(item.link ? { link: item.link } : {}) }
+  }
   if (schema?.type) return { label: Array.isArray(schema.type) ? schema.type.join(' | ') : String(schema.type) }
   return { label: 'object' }
+}
+
+function schemaOf(definition: any): any {
+  return definition?.schema || definition?.['original-schema'] || {}
+}
+
+function mediaTypes(schema: any): string[] {
+  const found = new Set<string>()
+  const visit = (node: any) => {
+    if (!node || typeof node !== 'object') return
+    if (typeof node.contentMediaType === 'string') found.add(node.contentMediaType)
+    for (const key of ['oneOf', 'anyOf', 'allOf']) if (Array.isArray(node[key])) node[key].forEach(visit)
+    if (node.items) visit(node.items)
+  }
+  visit(schema)
+  return [...found]
+}
+
+function displayDefault(value: unknown): string {
+  if (value === undefined) return ''
+  if (typeof value === 'string') return value
+  return JSON.stringify(value)
 }
 
 /** Inputs or outputs of a process description as a list; inputs say whether they are required. */
 export function ioEntries(map: unknown, kind: 'input' | 'output'): IoEntry[] {
   if (!map || typeof map !== 'object') return []
-  return Object.entries(map as Record<string, any>).map(([id, definition]) => ({
-    id,
-    ...(cleanDescription(definition?.title) && cleanDescription(definition?.title) !== id ? { title: cleanDescription(definition.title) } : {}),
-    description: cleanDescription(definition?.description),
-    ...(kind === 'input' ? { required: Number(definition?.minOccurs ?? 1) > 0 } : {}),
-    type: ioType(definition)
-  }))
+  return Object.entries(map as Record<string, any>).map(([id, definition]) => {
+    const schema = schemaOf(definition)
+    const title = cleanDescription(definition?.title)
+    const max = definition?.maxOccurs
+    const multiple = max === 'unbounded' ? 'unbounded' : Number(max) > 1 ? String(max) : ''
+    const defaultValue = displayDefault(schema?.default)
+    return {
+      id,
+      ...(title && title !== id ? { title } : {}),
+      description: cleanDescription(definition?.description),
+      ...(kind === 'input' ? { required: Number(definition?.minOccurs ?? 1) > 0 } : {}),
+      ...(multiple ? { multiple } : {}),
+      ...(defaultValue ? { defaultValue } : {}),
+      formats: mediaTypes(schema),
+      type: ioType(definition)
+    }
+  })
+}
+
+/** Rows that share an identifier with an earlier one are dropped (the server can list a process twice). */
+export function uniqueProcesses<T extends { id?: string }>(processes: T[]): T[] {
+  const seen = new Set<string>()
+  return processes.filter((process) => {
+    const id = String(process?.id ?? '')
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+/** Label of a metadata role or key without its namespace (`https://schema.org/author`, `s:name`). */
+export function termOf(key: string): string {
+  return String(key || '').split(/[/#]/).pop()!.replace(/^(s|schema):/, '')
 }

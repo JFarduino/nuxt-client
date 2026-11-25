@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   cleanDescription,
   formatDate,
+  formatDateTime,
+  isIsoDate,
+  termOf,
+  uniqueProcesses,
   hasProvenance,
   ioEntries,
   ioType,
@@ -110,17 +114,43 @@ describe('inputs and outputs', () => {
       'input'
     )
     expect(inputs).toEqual([
-      { id: 'seconds', description: 'number of seconds', required: false, type: { label: 'integer' } },
-      { id: 'name', description: 'Some keyword', required: true, type: { label: 'string' } }
+      { id: 'seconds', description: 'number of seconds', required: false, formats: [], type: { label: 'integer' } },
+      { id: 'name', description: 'Some keyword', required: true, formats: [], type: { label: 'string' } }
     ])
     expect(ioEntries({ out: { title: 'Result', schema: { type: 'string' } } }, 'output')).toEqual([
-      { id: 'out', title: 'Result', description: '', type: { label: 'string' } }
+      { id: 'out', title: 'Result', description: '', formats: [], type: { label: 'string' } }
     ])
     expect(ioEntries(null, 'input')).toEqual([])
     // ZOO-Project writes Python's None for a missing title or description.
     expect(ioEntries({ wf_outputs: { title: 'None', description: 'None', schema: { type: 'string' } } }, 'output')).toEqual([
-      { id: 'wf_outputs', description: '', type: { label: 'string' } }
+      { id: 'wf_outputs', description: '', formats: [], type: { label: 'string' } }
     ])
     expect(cleanDescription('None')).toBe('')
+  })
+})
+
+describe('complete input and output descriptions', () => {
+  it('keeps defaults, multiplicity, formats and array types', () => {
+    const [bands] = ioEntries({ bands: { title: 'bands', maxOccurs: 999, schema: { type: 'array', items: { type: 'string' }, default: ['green', 'nir'] } } }, 'input')
+    expect(bands).toEqual({ id: 'bands', required: true, multiple: '999', defaultValue: '["green","nir"]', description: '', formats: [], type: { label: 'string[]' } })
+    const [b] = ioEntries({ b: { minOccurs: 0, schema: { oneOf: [{ type: 'string', contentMediaType: 'text/xml' }, { type: 'object' }] } } }, 'input')
+    expect(b.formats).toEqual(['text/xml'])
+    expect(b.type).toEqual({ label: 'string | object' })
+    const [pause] = ioEntries({ pause: { minOccurs: 0, schema: { type: 'number', default: 10 } } }, 'input')
+    expect(pause.defaultValue).toBe('10')
+  })
+})
+
+describe('list and metadata helpers', () => {
+  it('drops processes listed twice', () => {
+    expect(uniqueProcesses([{ id: 'a', n: 1 }, { id: 'b' }, { id: 'a', n: 2 }])).toEqual([{ id: 'a', n: 1 }, { id: 'b' }])
+  })
+  it('names metadata terms and formats timestamps', () => {
+    expect(termOf('https://schema.org/sourceOrganization')).toBe('sourceOrganization')
+    expect(termOf('s:addressCountry')).toBe('addressCountry')
+    expect(isIsoDate('2025-11-24T23:11:32.936364Z')).toBe(true)
+    expect(isIsoDate('2024-01-02')).toBe(true)
+    expect(isIsoDate('INESCTEC')).toBe(false)
+    expect(formatDateTime('2025-11-24T23:07:35Z', 'fr')).toBe('24/11/2025 23:07 UTC')
   })
 })

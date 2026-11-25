@@ -38,12 +38,19 @@
   the bottom of the page (built-in processes used to open their page). The preview holds the
   workflow graph of the package, the actions (Execute, Jobs, CWL package, and Replace / Delete
   in a menu, which replace the Actions column), the description, execution modes, keywords,
-  inputs (type, required or optional) and outputs, and the provenance of the package on one
-  line with its details on demand. One row is open at a time and the address keeps it
-  (`?process=<id>`). The schema.org metadata is grouped (an organisation named as producer and
-  source organisation is listed once); the description falls back to the one of the package
-  when the server sends none or its message catalogue header, and the `None` titles the server
-  writes for untitled inputs are hidden. New `components/processes/ProcessPreview.vue` and
+  inputs (type, required or optional, number of values, default value, media types) and
+  outputs, and the provenance of the package on one line. **All metadata** shows everything
+  the server gives: the process fields, every schema.org metadata entry with all its fields
+  (nested organisations, addresses and persons, UTC dates, links to the schema.org terms) and
+  the full JSON document. One row is open at a time and the address keeps it
+  (`?process=<id>`, opened on its page of the table); a search, sorting or page change that
+  hides the open row folds it, and the preview is reloaded when the language changes. A
+  process the server lists twice appears once (it used to unfold two or three rows at once).
+  Errors are explicit: banner when the full description cannot be loaded, message for the
+  package refused to anonymous processes (`406`). The description falls back to the one of
+  the package when the server sends none or its message catalogue header, the `None` titles
+  the server writes for untitled inputs are hidden, and long descriptions stay on four lines
+  in the list. New `components/processes/ProcessPreview.vue`, `MetadataValue.vue` and
   `composables/utils/processMetadata.ts` (unit tested).
 
 ### Security
