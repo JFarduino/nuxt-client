@@ -3,6 +3,10 @@
 .gitignore
 .github
 
+# Local settings and secrets: `nuxt build` loads .env and bakes its values into .output
+.env
+.env.*
+
 # Local/dev artifacts
 node_modules
 .nuxt

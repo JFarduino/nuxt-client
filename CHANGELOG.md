@@ -80,6 +80,9 @@
   at deployment time (ConfigMap, bind mount) or point `NUXT_CSP_CONFIG_FILE` to another file.
   Placeholders `{ZOO_API}`, `{ZOO_WS}` and `{OIDC_ISSUER}` follow the UI settings; a report-only
   mode helps to try stricter policies. See `docs/configuration.md`.
+- Docker image: `.env` files are no longer sent to the build. `nuxt build` loads them, so an
+  image built from a checkout that has one carried its values (`NUXT_AUTH_SECRET` among them) in
+  `.output/server/chunks/nitro/nitro.mjs`.
 
 ### Fixed
 - Header tabs triggered a full page reload on every click (`href` instead of router links), so
