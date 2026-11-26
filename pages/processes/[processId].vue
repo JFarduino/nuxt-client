@@ -2449,16 +2449,6 @@ function getFormatAndRef(input) {
       <div class="q-mt-lg" v-if="response">
         <div class="row items-center q-mb-sm">
           <div class="text-h6 q-my-none">{{ t('Execution Response') }}</div>
-          <q-space />
-          <q-btn
-            v-if="jobId"
-            flat
-            dense
-            color="primary"
-            icon="work"
-            :label="t('Open the job page')"
-            :to="`/jobs/${jobId}`"
-          />
         </div>
         <q-banner v-if="response.error" dense rounded class="bg-red-1 text-negative q-mb-sm">
           <template #avatar><q-icon name="error" color="negative" /></template>

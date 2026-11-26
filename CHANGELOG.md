@@ -97,6 +97,8 @@
   their name; executions sent at that point were anonymous. The browser read the token once per
   page load and never renewed it, and a reload could hand it the stale one again. It is now
   renewed before it expires and before an API call that would carry an expired one.
+- Process page: the *Open the job page* button was shown twice once a job had started; the one
+  next to *Execute* remains.
 - Jobs pages refused to load without a bearer token even when the server accepts anonymous
   calls (`ZOO_OGCAPI_REQUIRES_BEARER_TOKEN=false`).
 - Job page polling never stopped on `successful` jobs (it compared with `succeeded`).
