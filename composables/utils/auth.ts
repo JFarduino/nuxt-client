@@ -28,6 +28,29 @@ export function isTokenUsable(token?: SessionToken | null, nowMs = Date.now()): 
   return nowMs / 1000 < expiresAt - TOKEN_MARGIN_SECONDS
 }
 
+/**
+ * Renew the access token this long before it expires. It must stay above
+ * TOKEN_MARGIN_SECONDS (the current token is still sent while it is renewed)
+ * and below the 30 s margin of the jwt callback in server/api/auth/[...].ts
+ * (otherwise the server hands back the same token).
+ */
+export const TOKEN_REFRESH_LEAD_SECONDS = 25
+
+/** Shortest wait before a renewal, so that a failed one is not retried in a loop. */
+export const TOKEN_REFRESH_MIN_DELAY_MS = 5000
+
+/**
+ * Milliseconds to wait before renewing the token, or null when there is
+ * nothing to schedule (no token, no expiry, or already expired: an expired
+ * token is renewed on demand before the next API call).
+ */
+export function tokenRefreshDelayMs(token?: SessionToken | null, nowMs = Date.now()): number | null {
+  if (!token?.access_token || token.error) return null
+  const expiresAt = tokenExpiresAt(token)
+  if (expiresAt === null || nowMs / 1000 >= expiresAt) return null
+  return Math.max((expiresAt - TOKEN_REFRESH_LEAD_SECONDS) * 1000 - nowMs, TOKEN_REFRESH_MIN_DELAY_MS)
+}
+
 /** True when the session carries a token that is dead for good (expired and not refreshable). */
 export function isSessionExpired(token?: SessionToken | null, nowMs = Date.now()): boolean {
   if (!token) return false

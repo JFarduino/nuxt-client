@@ -92,6 +92,11 @@
   The server now drops the tokens and flags the session; the client falls back to anonymous
   mode, shows a *Session expired* notice with a sign-in action, and a `401` received with a
   token triggers one retry without it.
+- Signed-in users saw *Sign in to view this job.* (or the same notice on the jobs list) once the
+  access token expired, usually a few minutes after signing in, while the header still showed
+  their name; executions sent at that point were anonymous. The browser read the token once per
+  page load and never renewed it, and a reload could hand it the stale one again. It is now
+  renewed before it expires and before an API call that would carry an expired one.
 - Jobs pages refused to load without a bearer token even when the server accepts anonymous
   calls (`ZOO_OGCAPI_REQUIRES_BEARER_TOKEN=false`).
 - Job page polling never stopped on `successful` jobs (it compared with `succeeded`).

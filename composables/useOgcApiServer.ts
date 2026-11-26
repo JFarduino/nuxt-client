@@ -1,4 +1,4 @@
-import { useRuntimeConfig } from '#imports'
+import { useNuxtApp, useRuntimeConfig } from '#imports'
 import { useAuthStore } from '~/stores/auth'
 import { parseOgcError } from '~/composables/utils/ogcError'
 import { isTokenUsable } from '~/composables/utils/auth'
@@ -42,6 +42,7 @@ let pendingServerBaseUrl: Promise<string | null> | null = null
 
 export function useOgcApiServer() {
   const config = useRuntimeConfig()
+  const nuxtApp = useNuxtApp()
   const authStore = useAuthStore()
   const loadingBar = useGlobalLoading()
   const trackStart = () => loadingBar.start()
@@ -79,6 +80,19 @@ export function useOgcApiServer() {
     return false
   }
 
+  /**
+   * Signed in, but the access token expired or is about to (the tab stayed
+   * open, the computer slept): get a fresh one before calling the API, instead
+   * of sending the request anonymously. See plugins/auth.js.
+   */
+  const ensureFreshToken = async () => {
+    if (!authStore.isAuthenticated || isTokenUsable(authStore.token)) {
+      return
+    }
+    const refresh = nuxtApp.$refreshAuthToken as (() => Promise<boolean>) | undefined
+    await refresh?.()
+  }
+
   const hasToken = () => !!getBearerToken()
 
   /** Can requests be sent now? (anonymous access allowed, or token available) */
@@ -89,6 +103,7 @@ export function useOgcApiServer() {
    * `timeoutMs`) until a token is available when one is required.
    */
   const waitUntilReady = async (timeoutMs = 4000) => {
+    await ensureFreshToken()
     const startedAt = Date.now()
     while (!isReady() && Date.now() - startedAt < timeoutMs) {
       await sleep(100)
@@ -218,6 +233,8 @@ export function useOgcApiServer() {
     const url = /^https?:\/\//i.test(path)
       ? path
       : await buildOgcApiUrl(path, { acceptLanguage, preferOpenApiServer })
+
+    await ensureFreshToken()
 
     const send = () =>
       $fetch<T>(url, {
