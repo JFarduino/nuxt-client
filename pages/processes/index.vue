@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from '#imports'
 import { useI18n } from 'vue-i18n'
-import { QCard, QCardSection, QInput, QBtn, QDialog, QForm, QUploader, QSpinnerGears, Notify } from 'quasar'
+import { QCard, QCardSection, QInput, QBtn, QDialog, QForm, QSpinnerGears, Notify } from 'quasar'
 import HelpDialog from '../../components/help/HelpDialog.vue'
 import processListHelp from '../../components/help/processListHelp.js'
 
@@ -18,7 +18,6 @@ import { summarizeCwl, validateCwlText } from '~/composables/utils/cwl'
 import { errorSummary } from '~/composables/utils/ogcError'
 
 
-const authStore = useAuthStore()
 const { locale, t } = useI18n()
 const { buildOgcApiUrl, getRequestHeaders, apiFetch } = useOgcApiServer()
 const loadingBar = useGlobalLoading()
@@ -76,7 +75,6 @@ watch(cwlSummary, (summary) => {
 
 
 //basic helpers 
-function debug(msg: string) { console.log('[proc:index] ', msg) }
 
 const viewProcess = (row: any) => {
   router.push(`/processes/${row.id}`)
@@ -555,8 +553,6 @@ watch(locale, async () => {
   await fetchData()
   if (open) loadPreview(rows.value.find((p: any) => p.id === open.id) || open)
 })
-
-const formattedData = computed(() => JSON.stringify(data.value, null, 2))
 
 const onClearSearch = async () => {
   filter.value = ''

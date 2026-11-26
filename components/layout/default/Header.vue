@@ -108,7 +108,6 @@
 import SettingsMenu from '~/components/layout/shared/SettingsMenu.vue'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useCookie } from '#app'
 import { useAuthStore } from '~/stores/auth'
 import { useLandingLinks } from '~/composables/utils/useLandingLinks'
 
@@ -126,14 +125,13 @@ const authBase = (config.public.AUTH_ORIGIN || '').replace(/\/$/, '') || ''
 
 
 
-const { locale, t } = useI18n()
+const { t } = useI18n()
 
 
 const $q = useQuasar()
 const stringToMD5 = useStringToMD5()
 
 const isProcessing = ref(false)
-const router = useRouter()
 const { signOut, signIn } = useAuth()
 // Go straight to the identity provider instead of the generic authjs sign-in page.
 const login = () => signIn('keycloak', { callbackUrl: window.location.href })

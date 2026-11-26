@@ -173,6 +173,13 @@
   fields white, and the inversion filter of the dark theme then made both dark. Swagger UI keeps
   the light scheme inside its own block and is inverted as a whole.
 
+### Removed
+- Unused code: components that were never rendered (`TopBarMenu`, `TopBarLeftMenu`,
+  `TopBarRightMenu`, and `HeaderMenu` since the header rework), `composables/utils/useApiFetch.ts`,
+  the root `callback.vue` (not a page, so never routed), the empty `config.*.json` files, unused
+  imports, variables and functions in the headers and the process pages, helpers and styles this
+  branch no longer uses, and 20 translation keys that no code reads.
+
 ### Documentation
 - `docs/known-issues.md`: server-side problems found while testing the UI end to end, with
   reproductions, so they can be reported to ZOO-Project.

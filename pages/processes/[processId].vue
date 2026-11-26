@@ -18,7 +18,6 @@ const {
   params: { processId }
 } = useRoute()
  
-const authStore = useAuthStore()
 const { locale, t } = useI18n()
 const config = useRuntimeConfig()
 const { buildOgcApiUrl, getRequestHeaders, apiFetch } = useOgcApiServer()
@@ -58,7 +57,6 @@ let drawLayer: L.LayerGroup | null = null
 let drawnFeature: L.Layer | null = null
 const enabledInputs = reactive<Record<string, boolean>>({})
 const isCanceling = ref(false)
-const jobCanceled = ref(false)
 const loadError = ref('')
 const requestUrl = useRequestURL()
 // Which outputs are requested (all by default). Outputs named like a disabled
@@ -236,76 +234,6 @@ const typeLabel = (input: any, inputId: string, valForInputId?: any) => {
 };
 
  
-const normalizeBboxSchema = (schema: any) => {
-  if (!schema) return schema
-
-  // Already correct — nothing to do
-  if (
-    schema.type === 'object' &&
-    schema.format === 'ogc-bbox' &&
-    schema.properties?.bbox &&
-    schema.properties?.crs
-  ) {
-    return schema
-  }
-
-  // Case 1: flattened bbox schema (items + crs at same level)
-  if (
-    schema.format === 'ogc-bbox' &&
-    schema.items &&
-    schema.crs
-  ) {
-    return {
-      type: 'object',
-      format: 'ogc-bbox',
-      required: ['bbox', 'crs'],
-      properties: {
-        bbox: {
-          type: 'array',
-          oneOf: [
-            { minItems: 4, maxItems: 4 },
-            { minItems: 6, maxItems: 6 }
-          ],
-          items: schema.items
-        },
-        crs: schema.crs
-      },
-      nullable: schema.nullable ?? false
-    }
-  }
-
-  // Case 2: allOf reference (bbox.yaml / ogc-bbox)
-  if (Array.isArray(schema.allOf)) {
-    const hasOgcBbox = schema.allOf.some(
-      s => s?.format === 'ogc-bbox' || /bbox\.yaml$/i.test(s?.['$ref'])
-    )
-
-    if (hasOgcBbox) {
-      return {
-        type: 'object',
-        format: 'ogc-bbox',
-        required: ['bbox', 'crs'],
-        properties: {
-          bbox: {
-            type: 'array',
-            oneOf: [
-              { minItems: 4, maxItems: 4 },
-              { minItems: 6, maxItems: 6 }
-            ],
-            items: { type: 'number', format: 'double' }
-          },
-          crs: {
-            type: 'string',
-            format: 'uri',
-            default: 'urn:ogc:def:crs:EPSG:6.6:4326'
-          }
-        }
-      }
-    }
-  }
-
-  return schema
-}
 
 const fetchData = async () => {
   try {
@@ -1070,9 +998,6 @@ const copyAsCurl = async () => {
  
  
  
-const isMultipleInput = (input: any) => {
-  return isMultiValueInput(input)
-}
  
 const isBoundingBoxInput = (input: any): boolean => {
   if (!input?.schema) return false;
