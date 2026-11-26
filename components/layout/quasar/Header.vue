@@ -21,7 +21,7 @@
 
         <div v-if="!authStore.user">
           <q-btn class="q-ml-sm" dense no-caps color="accent"
-                 :label="t('Authenticate')" :href="`${authBase}/api/auth/signin`"/>
+                 :label="t('Authenticate')" @click="signIn('keycloak')"/>
         </div>
         <div v-else>
           <q-btn rounded dense flat>
@@ -50,7 +50,7 @@
       <q-route-tab
         v-for="tab in homeTab"
         :key="tab.path"
-        :href="tab.path"
+        :to="tab.path"
         :label="t(tab.label)"
         no-caps
       />
@@ -63,7 +63,7 @@
         v-for="tab in rightTabs"
         :key="tab.path"
         :label="t(tab.label)"
-        :href="tab.path"
+        :to="tab.path"
         no-caps
       />
     </q-tabs>
@@ -75,29 +75,24 @@
 
 <script setup lang="ts">
 import SettingsMenu from '~/components/layout/shared/SettingsMenu.vue'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useCookie } from '#app'
 import { useAuthStore } from '~/stores/auth'
 import { useLandingLinks } from '~/composables/utils/useLandingLinks'
 
 import { useCustomAppConfig } from '~/composables/utils/useCustomAppConfig'
 
-const { locale, t } = useI18n()
+const { t } = useI18n()
 
 const authStore = useAuthStore()
 const { appTitle } = useCustomAppConfig()
 const config = useRuntimeConfig()
 
-const showHeaderMenu = ref(false)
-const isLoggedUser = ref(false) // TODO: Implement user authentication and pinia storage of user data
-const loggedUser = ref({email: 'mathereall@gmail.com'}) // TODO: Implement user authentication and pinia storage of user data
 
 
 const $q = useQuasar()
 const stringToMD5 = useStringToMD5()
-const router = useRouter()
-const {signOut} = useAuth()
+const { signOut, signIn } = useAuth()
 
 const { landingLinks } = useLandingLinks()
 // Get baseURL from app config
@@ -160,10 +155,6 @@ const rightTabs = computed(() =>
 
 
 const gravatarUrl = ref('https://www.gravatar.com/avatar/46d229b033af06a191ff2267bca9ae56/')
-
-const isSmallScreen = computed(() => {
-  return $q.screen.width <= $q.screen.sizes.sm
-})
 
 const isProcessing = ref(false)
 

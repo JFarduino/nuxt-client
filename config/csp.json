@@ -1,0 +1,18 @@
+{
+  "$comment": "Content-Security-Policy sent by the UI server with every response. Replace this file at deployment time (or point NUXT_CSP_CONFIG_FILE to another file); changes are picked up without a restart. Placeholders: {ZOO_API} (origin of NUXT_ZOO_BASEURL), {ZOO_WS} (origin of NUXT_WS_URL), {OIDC_ISSUER} (origin of NUXT_OIDC_ISSUER). See docs/configuration.md.",
+  "enabled": true,
+  "reportOnly": false,
+  "directives": {
+    "connect-src": [
+      "'self'",
+      "{ZOO_API}",
+      "{ZOO_WS}",
+      "{OIDC_ISSUER}",
+      "https://epsg.io",
+      "https://raw.githubusercontent.com"
+    ],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
+    "frame-ancestors": ["'self'"]
+  }
+}
