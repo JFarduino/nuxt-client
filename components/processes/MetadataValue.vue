@@ -2,7 +2,7 @@
   <span v-if="kind === 'empty'" class="metadata-value__muted">—</span>
   <a v-else-if="kind === 'url'" :href="text" target="_blank" rel="noopener" class="text-primary metadata-value__break">{{ text }}</a>
   <a v-else-if="kind === 'email'" :href="`mailto:${text}`" class="text-primary metadata-value__break">{{ text }}</a>
-  <span v-else-if="kind === 'date'" :title="text">{{ formatDateTime(text, locale) }}</span>
+  <span v-else-if="kind === 'date'" :title="text">{{ formatUtcDateTime(text, locale) }}</span>
   <span v-else-if="kind === 'text'" class="metadata-value__break metadata-value__text">{{ text }}</span>
   <ul v-else-if="kind === 'list'" class="metadata-value__list">
     <li v-for="(item, index) in (value as unknown[])" :key="index">
@@ -29,7 +29,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { formatDateTime, isIsoDate, termOf } from '~/composables/utils/processMetadata'
+import { formatUtcDateTime, isIsoDate, termOf } from '~/composables/utils/processMetadata'
 
 /**
  * A metadata value shown in full: text, links, e-mail addresses, dates (UTC,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   cleanDescription,
   formatDate,
-  formatDateTime,
+  formatUtcDateTime,
   isIsoDate,
   termOf,
   uniqueProcesses,
@@ -149,6 +149,6 @@ describe('list and metadata helpers', () => {
     expect(isIsoDate('2025-11-24T23:11:32.936364Z')).toBe(true)
     expect(isIsoDate('2024-01-02')).toBe(true)
     expect(isIsoDate('INESCTEC')).toBe(false)
-    expect(formatDateTime('2025-11-24T23:07:35Z', 'fr')).toBe('24/11/2025 23:07 UTC')
+    expect(formatUtcDateTime('2025-11-24T23:07:35Z', 'fr')).toBe('24/11/2025 23:07 UTC')
   })
 })

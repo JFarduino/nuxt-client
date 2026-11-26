@@ -166,7 +166,7 @@ export function summarizeProvenance(metadata: unknown): Provenance {
 }
 
 /** Date and time of an ISO timestamp in UTC (24/11/2025 23:07 UTC), or the text itself. */
-export function formatDateTime(value: string | undefined, locale = 'en'): string {
+export function formatUtcDateTime(value: string | undefined, locale = 'en'): string {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
