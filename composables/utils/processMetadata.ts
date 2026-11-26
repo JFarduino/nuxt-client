@@ -165,19 +165,6 @@ export function summarizeProvenance(metadata: unknown): Provenance {
   return provenance
 }
 
-/** True when there is anything to show in the provenance block. */
-export function hasProvenance(provenance: Provenance): boolean {
-  return Boolean(
-    provenance.authors.length ||
-      provenance.organizations.length ||
-      provenance.identifier ||
-      provenance.dateCreated ||
-      provenance.datePublished ||
-      provenance.publisher ||
-      provenance.others.length
-  )
-}
-
 /** Date and time of an ISO timestamp in UTC (24/11/2025 23:07 UTC), or the text itself. */
 export function formatDateTime(value: string | undefined, locale = 'en'): string {
   if (!value) return ''

@@ -2559,6 +2559,10 @@ function getFormatAndRef(input) {
 </template>
 
 <style scoped>
+.long-text {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
 .response-pre {
   max-height: 480px;
   overflow: auto;

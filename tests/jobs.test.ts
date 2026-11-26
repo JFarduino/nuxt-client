@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  formatDuration,
   formatDurationMs,
   isActiveStatus,
   isLogLink,
@@ -10,7 +9,6 @@ import {
   linkRelLabel,
   isExceptionDocument,
   newestFirstWindow,
-  nextSkip,
   normalizeStatus,
   resultsHref,
   statusColor,
@@ -56,7 +54,6 @@ describe('durations', () => {
     const running = { created: '2026-11-05T13:00:00.000Z', status: 'running' }
     const now = new Date('2026-11-05T13:00:30.000Z').getTime()
     expect(jobDurationMs(running, now)).toBe(30_000)
-    expect(formatDuration('2026-11-05T13:00:00.000Z', '2026-11-05T13:00:05.000Z')).toBe('5 s')
   })
 })
 
@@ -88,10 +85,6 @@ describe('jobs list query', () => {
       processID: 'echo'
     })
     expect(jobsQuery({})).toEqual({})
-  })
-  it('reads the skip of the next link', () => {
-    expect(nextSkip({ jobs: [], links: [{ rel: 'next', href: 'http://x/jobs?limit=2&skip=2' }] })).toBe(2)
-    expect(nextSkip({ jobs: [], links: [] })).toBeNull()
   })
 })
 

@@ -860,11 +860,6 @@ const onClearSearch = async () => {
   </q-page>
 </template>
 <style>
-.long-text {
-  word-break: break-all;
-  overflow-wrap: anywhere;
-}
-
 .description-cell {
   white-space: normal;
   word-break: break-word;

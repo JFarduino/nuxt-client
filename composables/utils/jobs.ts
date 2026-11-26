@@ -3,7 +3,6 @@
  * unit tested with vitest).
  */
 export const JOB_STATUSES = ['accepted', 'running', 'successful', 'failed', 'dismissed'] as const
-export type JobStatus = (typeof JOB_STATUSES)[number]
 
 export const TERMINAL_STATUSES: readonly string[] = ['successful', 'failed', 'dismissed']
 
@@ -105,15 +104,6 @@ export function formatDurationMs(ms?: number | null): string {
   return `${seconds} s`
 }
 
-export function formatDuration(startIso?: string | null, endIso?: string | null, now = Date.now()): string {
-  if (!startIso) return ''
-  const start = new Date(startIso).getTime()
-  if (Number.isNaN(start)) return ''
-  const end = endIso ? new Date(endIso).getTime() : now
-  if (Number.isNaN(end)) return ''
-  return formatDurationMs(end - start)
-}
-
 /** Duration of a job in milliseconds (running jobs are measured against `now`). */
 export function jobDurationMs(job: any, now = Date.now()): number | null {
   const start = job?.started ?? job?.created
@@ -202,19 +192,6 @@ export function jobsQuery(options: {
   if (options.minDuration !== undefined) query.minDuration = options.minDuration
   if (options.maxDuration !== undefined) query.maxDuration = options.maxDuration
   return query
-}
-
-/** Try to read the `skip` value of the `next` link of a jobs page. */
-export function nextSkip(page: JobsPage | null | undefined): number | null {
-  const next = findLink(page?.links, 'next')?.href
-  if (!next) return null
-  try {
-    const url = new URL(next, 'http://localhost')
-    const skip = url.searchParams.get('skip') ?? url.searchParams.get('offset')
-    return skip !== null ? Number(skip) : null
-  } catch {
-    return null
-  }
 }
 
 /**

@@ -6,7 +6,6 @@ import {
   isIsoDate,
   termOf,
   uniqueProcesses,
-  hasProvenance,
   ioEntries,
   ioType,
   isTranslationHeader,
@@ -68,11 +67,10 @@ describe('summarizeProvenance', () => {
     expect(p.others).toEqual([
       { label: 'license', value: 'https://www.apache.org/licenses/LICENSE-2.0', href: 'https://www.apache.org/licenses/LICENSE-2.0' }
     ])
-    expect(hasProvenance(p)).toBe(true)
   })
 
   it('handles missing or odd metadata', () => {
-    expect(hasProvenance(summarizeProvenance(undefined))).toBe(false)
+    expect(summarizeProvenance(undefined)).toEqual({ authors: [], organizations: [], others: [] })
     const p = summarizeProvenance([
       { role: 'https://schema.org/author', value: ['Bob', { givenName: 'Cy', familyName: 'Dee' }, 'Bob'] },
       { title: 'Documentation', href: 'https://docs.example.org' },

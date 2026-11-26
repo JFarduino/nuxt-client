@@ -16,7 +16,7 @@ import VectorSource from 'ol/source/Vector'
 import VectorLayer from 'ol/layer/Vector'
 import Feature from 'ol/Feature'
 import Polygon from 'ol/geom/Polygon'
-import { fromLonLat, transformExtent } from 'ol/proj'
+import { fromLonLat } from 'ol/proj'
 import { Fill, Stroke, Style, Circle as CircleStyle } from 'ol/style'
 
 /**

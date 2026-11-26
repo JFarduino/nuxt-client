@@ -232,12 +232,6 @@ watch(locale, applyQuasarLang)
 .body--dark .text-orange-10 {
   color: #ffb74d !important;
 }
-.body--dark .custom-table th {
-  border-color: #3a3a3a;
-}
-.body--dark .custom-table td {
-  border-color: #333;
-}
 .body--dark .help-container {
   color: #e0e0e0 !important;
 }
